@@ -1,30 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
   <metadata>
-    <id>ServiceStack.ProtoBuf.Core</id> 
-    <title>ServiceStack.ProtoBuf .NET Standard 2.0 version</title>
-    <version>5.0.0</version> 
-    <authors>ServiceStack</authors> 
+    <id>ServiceStack.RabbitMq.Core</id>
+    <title>ServiceStack.RabbitMq .NET Standard 2.0</title>
+    <version>5.0.0</version>
+    <authors>ServiceStack</authors>
     <owners>ServiceStack</owners>
-    <summary>.NET Standard 2.0 version ServiceStack.ProtoBuf</summary>
+    <summary>Opensource .NET and Mono REST Web Services framework</summary>
     <description>
-      Add the ProtoBuf binary format and endpoint to a ServiceStack web service host. 
-    </description> 
+      .NET Standard 2.0 version of ServiceStack.RabbitMq
+    </description>
     <projectUrl>https://github.com/ServiceStack/ServiceStack</projectUrl>
     <licenseUrl>https://servicestack.net/terms</licenseUrl>
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
     <iconUrl>https://servicestack.net/img/logo-32.png</iconUrl>
-    <tags>ProtoBuf Fast Binary Serializer Format ContentType REST Web Services ServiceStack</tags>
+    <tags>MQ Message Queue Web Service Framework Fast JSON MONO ServiceStack</tags>
     <language>en-US</language>
     <copyright>ServiceStack and contributors</copyright>
     <dependencies>
       <group targetFramework=".netstandard2.0">
-        <dependency id="protobuf-net" version="[2.3.3, )" />
+        <dependency id="RabbitMQ.Client" version="[5.0.1, )" />
         <dependency id="ServiceStack.Core" version="5.0.0" />
       </group>
     </dependencies>
   </metadata>
   <files>
     <file src="lib\**\*.*" target="lib" />
-    <file src="..\..\src\ServiceStack.ProtoBuf\**\*.cs" target="src" />
+    <file src="..\..\src\ServiceStack.RabbitMq\**\*.cs" target="src" />
   </files>
 </package>

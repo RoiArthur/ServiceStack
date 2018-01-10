@@ -131,8 +131,7 @@ namespace ServiceStack
         {
             if (StripUpperInLike)
             {
-                string convention;
-                if (ImplicitConventions.TryGetValue("%Like%", out convention) && convention == CaseInsensitiveLikeFormat)
+                if (ImplicitConventions.TryGetValue("%Like%", out var convention) && convention == CaseInsensitiveLikeFormat)
                     ImplicitConventions["%Like%"] = CaseSensitiveLikeFormat;
 
                 foreach (var attr in EndsWithConventions)
@@ -491,8 +490,7 @@ namespace ServiceStack
             if (QueryFilters == null)
                 return (SqlExpression<From>)q;
 
-            QueryFilterDelegate filterFn = null;
-            if (!QueryFilters.TryGetValue(dto.GetType(), out filterFn))
+            if (!QueryFilters.TryGetValue(dto.GetType(), out var filterFn))
             {
                 foreach (var type in dto.GetType().GetInterfaces())
                 {
@@ -511,8 +509,7 @@ namespace ServiceStack
             if (QueryFilters == null)
                 return q;
 
-            QueryFilterDelegate filterFn = null;
-            if (!QueryFilters.TryGetValue(dto.GetType(), out filterFn))
+            if (!QueryFilters.TryGetValue(dto.GetType(), out var filterFn))
             {
                 foreach (var type in dto.GetType().GetInterfaces())
                 {
@@ -561,8 +558,7 @@ namespace ServiceStack
                     responseFilter(ctx);
                 }
 
-                string total;
-                response.Total = response.Meta.TryGetValue("COUNT(*)", out total)
+                response.Total = response.Meta.TryGetValue("COUNT(*)", out var total)
                     ? total.ToInt()
                     : (int)Db.Count(expr); //fallback if it's not populated (i.e. if stripped by custom ResponseFilter)
 
@@ -780,11 +776,21 @@ namespace ServiceStack
 
             if (!string.IsNullOrEmpty(dto.Fields))
             {
-                var fields = dto.Fields.Split(',')
+                var fields = dto.Fields;
+                var selectDistinct = fields.StartsWith("DISTINCT ", StringComparison.OrdinalIgnoreCase);
+                if (selectDistinct)
+                {
+                    fields = fields.Substring("DISTINCT ".Length);
+                }
+
+                var fieldNames = fields.Split(',')
                     .Where(x => x.Trim().Length > 0)
                     .Map(x => x.Trim());
 
-                q.Select(fields.ToArray());
+                if (selectDistinct)
+                    q.SelectDistinct(fieldNames.ToArray());
+                else
+                    q.Select(fieldNames.ToArray());
             }
 
             return q;
@@ -792,9 +798,7 @@ namespace ServiceStack
 
         private void AppendSqlFilters(SqlExpression<From> q, IQueryDb dto, Dictionary<string, string> dynamicParams, IAutoQueryOptions options)
         {
-            string select, from, where;
-
-            dynamicParams.TryGetValue("_select", out select);
+            dynamicParams.TryGetValue("_select", out var select);
             if (select != null)
             {
                 dynamicParams.Remove("_select");
@@ -802,7 +806,7 @@ namespace ServiceStack
                 q.Select(select);
             }
 
-            dynamicParams.TryGetValue("_from", out from);
+            dynamicParams.TryGetValue("_from", out var from);
             if (from != null)
             {
                 dynamicParams.Remove("_from");
@@ -810,7 +814,7 @@ namespace ServiceStack
                 q.From(from);
             }
 
-            dynamicParams.TryGetValue("_where", out where);
+            dynamicParams.TryGetValue("_where", out var where);
             if (where != null)
             {
                 dynamicParams.Remove("_where");

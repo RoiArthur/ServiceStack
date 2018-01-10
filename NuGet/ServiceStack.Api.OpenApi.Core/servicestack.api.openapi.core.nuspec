@@ -1,15 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
   <metadata>
-    <id>ServiceStack.Api.OpenApi</id>
-    <title>ServiceStack Open API metadata provider and Swagger UI</title>
+    <id>ServiceStack.Api.OpenApi.Core</id>
+    <title>ServiceStack.Api.OpenApi .NET Standard 2.0</title>
     <version>5.0.0</version>
     <authors>ServiceStack</authors>
     <owners>ServiceStack</owners>
-    <summary>ServiceStack integration with Open API v2.0</summary>
     <description>
-      Implements v2.0 of the Open API Specification (https://www.openapis.org).
-      Open API is a specification and complete framework implementation for describing, producing, consuming, and visualizing RESTful web services.
+      .NET Standard 2.0 version of ServiceStack.Api.OpenApi
     </description>
     <projectUrl>https://github.com/ServiceStack/ServiceStack</projectUrl>
     <licenseUrl>https://servicestack.net/terms</licenseUrl>
@@ -18,15 +16,12 @@
     <language>en-US</language>
     <copyright>ServiceStack and contributors</copyright>
     <dependencies>
-      <group targetFramework="net45">
-        <dependency id="ServiceStack" version="5.0.0" />
-      </group>
       <group targetFramework=".netstandard2.0">
         <dependency id="System.ServiceModel.Primitives" version="[4.4.0, )" />
         <dependency id="System.Xml.XmlSerializer" version="[4.3.0, )" />
         <dependency id="System.Runtime.Serialization.Primitives" version="[4.3.0, )" />
         <dependency id="System.Collections.Specialized" version="[4.3.0, )" />
-        <dependency id="ServiceStack" version="5.0.0" />
+        <dependency id="ServiceStack.Core" version="5.0.0" />
       </group>
     </dependencies>
   </metadata>
