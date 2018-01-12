@@ -1,9 +1,7 @@
-﻿using System;
+﻿using ServiceStack.Text;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Apache.NMS;
-using ServiceStack.Messaging;
-using ServiceStack.Text;
 
 namespace ServiceStack.ActiveMq
 {
@@ -20,12 +18,10 @@ namespace ServiceStack.ActiveMq
 		public async Task StartAsync(Messaging.IMessageHandler handler, Func<bool> DoNext = null)
 		{
 			base.msgHandler = handler;
-			string queueName = Messaging.QueueNames.ResolveQueueNameFn(this.msgHandler.MessageType.Name, ".inq");
 			if(DoNext==null) DoNext = new Func<bool>(() => true);
 			await Task.Factory.StartNew(async () => { await this.OpenAsync(); }, cancellationTokenSource.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-			base.msgHandler.ProcessQueue(this, queueName, DoNext);
+			base.msgHandler.ProcessQueue(this, base.ResolveQueueNameFn(handler.MessageType.Name,".inq"), DoNext);
 		}
-
 
 		/// <summary>
 		// Turn received Message into expected type of the ServiceStackMessageHandler<T>
@@ -73,7 +69,6 @@ namespace ServiceStack.ActiveMq
 			return ((Apache.NMS.IObjectMessage)mqResponse).ToMessage<T>();
 		}
 
-		
 		public ServiceStack.Messaging.IMessage<T> Get<T>(string queueName, TimeSpan? timeSpanOut = null)
 		{
 			/// Manage timeout in that function
@@ -96,7 +91,6 @@ namespace ServiceStack.ActiveMq
 		/// <returns></returns>
 		public ServiceStack.Messaging.IMessage<T> GetAsync<T>(string queueName)
 		{
-
 			ServiceStack.Messaging.IMessage<T> response = null;
 			using (Apache.NMS.IDestination destination = Apache.NMS.Util.SessionUtil.GetDestination(this.Session, queueName))
 			using (Apache.NMS.IMessageConsumer consumer = this.Session.CreateConsumer(destination))
@@ -134,11 +128,5 @@ namespace ServiceStack.ActiveMq
 			throw new NotImplementedException();
 		}
 
-		public override void Dispose()
-		{
-			base.Dispose();
-		}
-
-		
 	}
 }

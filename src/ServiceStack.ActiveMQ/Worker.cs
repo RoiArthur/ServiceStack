@@ -1,79 +1,81 @@
-﻿using Apache.NMS;
-using ServiceStack.ActiveMq;
-using ServiceStack.Logging;
-using ServiceStack.Text;
+﻿using ServiceStack.Logging;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 
-internal class Worker
+namespace ServiceStack.ActiveMq
 {
-	private static readonly ILog Log = LogManager.GetLogger(typeof(Worker));
-
-	internal readonly ServiceStack.Messaging.IMessageFactory messageFactory;
-	internal readonly ServiceStack.Messaging.IMessageHandler messageHandler;
-
-	internal Action<Worker, Exception> ErrorHandler { get; set; }
-
-	ServiceStack.Messaging.IMessageQueueClient client = null;
-	internal ServiceStack.Messaging.IMessageQueueClient MQClient
+	internal class Worker
 	{
-		get
+		private static readonly ILog Log = LogManager.GetLogger(typeof(Worker));
+
+		internal readonly ServiceStack.Messaging.IMessageFactory messageFactory;
+		internal readonly ServiceStack.Messaging.IMessageHandler messageHandler;
+
+		internal Action<Worker, Exception> ErrorHandler { get; set; }
+
+		ServiceStack.Messaging.IMessageQueueClient client = null;
+		internal ServiceStack.Messaging.IMessageQueueClient MQClient
 		{
-			if (client == null)
+			get
 			{
-				client = this.messageFactory.CreateMessageQueueClient();
+				if (client == null)
+				{
+					client = this.messageFactory.CreateMessageQueueClient();
+				}
+				return client;
 			}
+		}
+
+		private Worker(ServiceStack.Messaging.IMessageFactory factory,
+			ServiceStack.Messaging.IMessageHandler handler,
+			Action<Worker, Exception> errorHandler)
+		{
+			this.messageFactory = factory;
+			this.messageHandler = handler;
+			this.ErrorHandler = errorHandler;
+		}
+
+		internal async Task Subscribe(ServiceStack.Messaging.IMessageHandler handler, int messagesCount = int.MaxValue, TimeSpan? timeOut = null)
+		{
+			try
+			{
+				await ((QueueClient)this.MQClient).StartAsync(handler);
+			}
+			catch (Exception ex)
+			{
+				ErrorHandler?.Invoke(this, ex);
+				Log.Error("Could not START Active MQ Worker : ", ex);
+			}
+
+		}
+
+		internal static async Task<Worker> StartAsync(Server service, ServiceStack.Messaging.IMessageHandlerFactory factory)
+		{
+			ServiceStack.Messaging.IMessageHandler handler = factory.CreateMessageHandler();
+			Worker client = new Worker(service.MessageFactory, handler, service.ErrorHandler);
+			await Task.Factory.StartNew(() => client.Subscribe(handler));
 			return client;
 		}
-	}
 
-	private Worker(ServiceStack.Messaging.IMessageFactory factory, 
-		ServiceStack.Messaging.IMessageHandler handler, 
-		Action<Worker, Exception> errorHandler)
-	{
-		this.messageFactory = factory;
-		this.messageHandler = handler;
-		this.ErrorHandler = errorHandler;
-	}
-
-	internal async Task Subscribe(ServiceStack.Messaging.IMessageHandler handler,int messagesCount = int.MaxValue, TimeSpan? timeOut = null)
-	{
-		try
+		internal async Task CloseAsync()
 		{
-			await ((QueueClient)this.MQClient).StartAsync(handler);
+			await Task.Factory.StartNew(() => this.Dispose());
 		}
-		catch (Exception ex)
+		#region IDisposable Members
+
+		private bool isDisposed = false;
+		public void Dispose()
 		{
-			ErrorHandler?.Invoke(this, ex);
-			Log.Error("Could not START Active MQ Worker : ",ex);
+			if (!this.isDisposed)
+			{
+				this.MQClient.Dispose();
+				this.isDisposed = true;
+			}
 		}
-		
+
+		#endregion
+
 	}
-
-	internal static async Task<Worker> StartAsync(Server service, ServiceStack.Messaging.IMessageHandlerFactory factory)
-	{
-		ServiceStack.Messaging.IMessageHandler handler = factory.CreateMessageHandler();
-		Worker client = new Worker(service.MessageFactory, handler, service.ErrorHandler);
-		await client.Subscribe(handler);
-		return client;
-	}
-
-	#region IDisposable Members
-
-	private bool isDisposed = false;
-	public void Dispose()
-	{
-		if (!this.isDisposed)
-		{
-			// Declare disposed for the garbage collector
-			this.isDisposed = true;
-		}
-	}
-
-	#endregion
-
 }
+	
 

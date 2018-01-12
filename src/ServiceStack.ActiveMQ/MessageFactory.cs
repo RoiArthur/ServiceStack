@@ -1,9 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Apache.NMS;
-//using ActiveMq.Client;
+﻿using Apache.NMS;
 using ServiceStack.Logging;
+using System;
+using System.Collections.Generic;
 
 
 namespace ServiceStack.ActiveMq
@@ -12,17 +10,16 @@ namespace ServiceStack.ActiveMq
 	{
 		private static readonly ILog Log = LogManager.GetLogger(typeof(MessageFactory));
 
-
 		internal Apache.NMS.IConnectionFactory ConnectionFactory = null;
 
 		public string UserName { get; private set; }
 		internal string Password { get; private set; }
 
-
+		public Func<object, string, string> ResolveQueueNameFn { get; internal set; }
 		public Action<string, Apache.NMS.IPrimitiveMap, ServiceStack.Messaging.IMessage> PublishMessageFilter { get; set; }
 		public Action<string, ServiceStack.Messaging.IMessage> GetMessageFilter { get; set; }
 
-		internal MessageFactory(IConnectionFactory  connectionFactory)
+		internal MessageFactory(IConnectionFactory connectionFactory)
 		{
 			System.Diagnostics.Contracts.Contract.Requires(connectionFactory != null && connectionFactory.BrokerUri != null);
 			if (connectionFactory == null)
@@ -98,22 +95,25 @@ namespace ServiceStack.ActiveMq
 			return new QueueClient(this)
 			{
 				PublishMessageFilter = PublishMessageFilter,
-				GetMessageFilter = GetMessageFilter
+				GetMessageFilter = GetMessageFilter,
+				ResolveQueueNameFn = ResolveQueueNameFn
 			};
-		}
 
-		public virtual Messaging.IMessageProducer CreateMessageProducer()
-		{
-			return new Producer(this)
-			{
-				PublishMessageFilter = PublishMessageFilter,
-				GetMessageFilter = GetMessageFilter
-			};
-		}
-
-		public void Dispose()
-		{
-			throw new NotImplementedException();
-		}
 	}
+
+	public virtual Messaging.IMessageProducer CreateMessageProducer()
+	{
+		return new Producer(this)
+		{
+			PublishMessageFilter = PublishMessageFilter,
+			GetMessageFilter = GetMessageFilter,
+			ResolveQueueNameFn = ResolveQueueNameFn
+		};
+	}
+
+	public void Dispose()
+	{
+			this.ConnectionFactory = null;
+	}
+}
 }

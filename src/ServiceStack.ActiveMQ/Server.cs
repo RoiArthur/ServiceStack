@@ -1,15 +1,13 @@
-﻿using System;
+﻿using ServiceStack.Logging;
+using ServiceStack.Messaging;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using ServiceStack.Logging;
-using ServiceStack.Messaging;
 
 
 namespace ServiceStack.ActiveMq
 {
-	public class Server : IMessageService
+	public class Server : IMessageService, IDisposable
 	{
 
 		private static readonly ILog Log = LogManager.GetLogger(typeof(Server));
@@ -29,7 +27,6 @@ namespace ServiceStack.ActiveMq
 		/// </summary>
 		public Func<object, object> ResponseFilter { get; set; }
 
-
 		public Action<string, Apache.NMS.IPrimitiveMap, IMessage> PublishMessageFilter
 		{
 			get { return messageFactory.PublishMessageFilter; }
@@ -42,19 +39,27 @@ namespace ServiceStack.ActiveMq
 			set { messageFactory.GetMessageFilter = value; }
 		}
 
+		public Func<object, string, string> ResolveQueueNameFn
+		{
+			get { return messageFactory.ResolveQueueNameFn; }
+			set { messageFactory.ResolveQueueNameFn = value; }
+		}
+
 		public Action<string, Dictionary<string, object>> CreateQueueFilter { get; set; }
 		public Action<string, Dictionary<string, object>> CreateTopicFilter { get; set; }
 
-		public Server(string connectionString = "tcp://localhost:61616", string username = null, string password = null): this(new ActiveMq.MessageFactory(new Apache.NMS.NMSConnectionFactory(connectionString)))
+		public Server(string connectionString = "tcp://localhost:61616", string username = null, string password = null): this(
+			new ActiveMq.MessageFactory(new Apache.NMS.NMSConnectionFactory(connectionString)))
 		{
+
 		}
 
 		public Server(ActiveMq.MessageFactory messageFactory)
 		{
 			this.messageFactory = messageFactory;
+			this.ResolveQueueNameFn = (type, suffix) => ServiceStack.Messaging.QueueNames.ResolveQueueNameFn(type as string, suffix);
 			this.ErrorHandler = (worker, ex) => Log.Error("Exception in Active MQ Plugin: ", ex);
 		}
-
 
 		protected IMessageHandlerFactory CreateMessageHandlerFactory<T>(Func<IMessage<T>, object> processMessageFn, Action<IMessageHandler, IMessage<T>, Exception> processExceptionEx)
 		{
@@ -78,16 +83,10 @@ namespace ServiceStack.ActiveMq
 		/// </summary>
 		internal Action<Worker, Exception> ErrorHandler { get; set; }
 
-
 		public List<Type> RegisteredTypes => handlerMap.Keys.ToList();
 
 		private readonly Dictionary<Type, Tuple<IMessageHandlerFactory, Worker[]>> handlerMap = new Dictionary<Type, Tuple<IMessageHandlerFactory, Worker[]>>();
 
-		//public List<Type> RegisteredTypes { get; private set; }
-		public void Dispose()
-		{
-			throw new NotImplementedException();
-		}
 		public IMessageHandlerStats GetStats()
 		{
 			throw new NotImplementedException();
@@ -133,18 +132,14 @@ namespace ServiceStack.ActiveMq
 
 		public void Start()
 		{
-				handlerMap.ToList().ForEach(
-				async handlerEntry =>
+			handlerMap.Select(kv => kv.Value)
+				.ToList()
+				.ForEach(async tuple => {
+					for(int i= 0;i< tuple.Item2.Length; i++)
 					{
-						// Length of workers array (= threadCount)
-						int threadCount = handlerEntry.Value.Item2.Length; 
-						// Select all Workers Start Tasks
-						Task<Worker>[] workers = Enumerable.Range(0, threadCount)
-							.Select(item => Worker.StartAsync(this,handlerEntry.Value.Item1)).ToArray();
-						// Fill in the handlerMap gor this type with IMessageHandlerFactory and the array of workers (ThreadCount)
-						handlerMap[handlerEntry.Key] = new Tuple<IMessageHandlerFactory, Worker[]>(handlerEntry.Value.Item1, await Task.WhenAll(workers));
+						tuple.Item2[i] = await Worker.StartAsync(this, tuple.Item1);
 					}
-				);
+			}); ;
 		}
 
 		public void Stop()
@@ -155,7 +150,13 @@ namespace ServiceStack.ActiveMq
 					worker.Dispose();
 				}
 			);
+		}
+
+		public void Dispose()
+		{
 			this.messageFactory.Dispose();
+			this.Dispose();
+			GC.Collect();
 		}
 	}
 }

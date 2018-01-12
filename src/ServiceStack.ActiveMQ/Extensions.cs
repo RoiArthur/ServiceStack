@@ -1,15 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Apache.NMS;
+﻿using Apache.NMS;
 using ServiceStack.Logging;
 using ServiceStack.Text;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace ServiceStack.ActiveMq
 {
-    public static class ActiveMqExtensions
+	public static class ActiveMqExtensions
     {
 
 		private static readonly ILog Log = LogManager.GetLogger(typeof(MessageFactory));
@@ -156,181 +154,6 @@ namespace ServiceStack.ActiveMq
 			});
 		}
 
-		public static void RegisterDirectExchange(this ISession session, string exchangeName = null)
-		{
-			//session.ExchangeDeclare(exchangeName ?? QueueNames.Exchange, "direct", durable: true, autoDelete: false, arguments: null);
-		}
-
-		public static void RegisterDlqExchange(this ISession session, string exchangeName = null)
-		{
-			//session.ExchangeDeclare(exchangeName ?? QueueNames.ExchangeDlq, "direct", durable: true, autoDelete: false, arguments: null);
-		}
-
-		public static void RegisterTopicExchange(this ISession session, string exchangeName = null)
-		{
-			//session.ExchangeDeclare(exchangeName ?? QueueNames.ExchangeTopic, "topic", durable: false, autoDelete: false, arguments: null);
-		}
-
-		public static void RegisterFanoutExchange(this ISession session, string exchangeName)
-		{
-			//session.ExchangeDeclare(exchangeName, "fanout", durable: false, autoDelete: false, arguments: null);
-		}
-
-		public static void RegisterQueues<T>(this ISession session)
-		{
-			session.RegisterQueue(Messaging.QueueNames<T>.In);
-			session.RegisterQueue(Messaging.QueueNames<T>.Priority);
-			session.RegisterTopic(Messaging.QueueNames<T>.Out);
-			session.RegisterDlq(Messaging.QueueNames<T>.Dlq);
-		}
-
-		public static void RegisterQueues(this ISession session, Messaging.QueueNames queueNames)
-		{
-			session.RegisterQueue(queueNames.In);
-			session.RegisterQueue(queueNames.Priority);
-			session.RegisterTopic(queueNames.Out);
-			session.RegisterDlq(queueNames.Dlq);
-		}
-
-		public static void RegisterQueue(this ISession session, string queueName)
-		{
-
-			GetActiveMqServer()?.CreateQueueFilter?.Invoke(queueName,null);
-
-			if (!Messaging.QueueNames.IsTempQueue(queueName)) //Already declared in GetTempQueueName()
-			{
-				//session.QueueDeclare(queueName, durable: true, exclusive: false, autoDelete: false, arguments: args);
-			    ITemporaryQueue tempqueue =	session.CreateTemporaryQueue();
-			}
-
-			//session.QueueBind(queueName, Messaging.QueueNames.Exchange, routingKey: queueName);
-		}
-
-		public static void RegisterDlq(this ISession session, string queueName)
-		{
-			var args = new Dictionary<string, object>();
-
-			GetActiveMqServer()?.CreateQueueFilter?.Invoke(queueName, args);
-
-			//session.QueueDeclare(queueName, durable: true, exclusive: false, autoDelete: false, arguments: args);
-			//session.QueueBind(queueName, Messaging.QueueNames.ExchangeDlq, routingKey: queueName);
-		}
-
-		public static void RegisterTopic(this ISession session, string queueName)
-		{
-			var args = new Dictionary<string, object>();
-
-			GetActiveMqServer()?.CreateTopicFilter?.Invoke(queueName, args);
-
-			//session.QueueDeclare(queueName, durable: false, exclusive: false, autoDelete: false, arguments: args);
-			//session.QueueBind(queueName, Messaging.QueueNames.ExchangeTopic, routingKey: queueName);
-		}
-
-		public static void DeleteQueue<T>(this ISession model)
-		{
-			model.DeleteQueues(Messaging.QueueNames<T>.AllQueueNames);
-		}
-
-		public static void DeleteQueues(this ISession session, params string[] queues)
-		{
-
-				try
-				{
-					session.DeleteQueues(queues);
-
-				}
-				catch (InvalidDestinationException ex)
-				{
-					if (!ex.Message.Contains("code=404"))
-						throw;
-				}
-			
-		}
-
-		public static void PurgeQueue<T>(this ISession model)
-		{
-			model.PurgeQueues(Messaging.QueueNames<T>.AllQueueNames);
-		}
-
-		public static void PurgeQueues(this ISession session, params string[] queues)
-		{
-				try
-				{
-					session.PurgeQueues(queues);
-				}
-				catch (InvalidDestinationException ex)
-				{
-					if (!ex.Is404())throw;
-				}
-		}
-
-		public static void RegisterExchangeByName(this ISession session, string exchange)
-		{
-			if (exchange.EndsWith(".dlq"))
-				session.RegisterDlqExchange(exchange);
-			else if (exchange.EndsWith(".topic"))
-				session.RegisterTopicExchange(exchange);
-			else
-				session.RegisterDirectExchange(exchange);
-		}
-
-		public static void RegisterQueueByName(this ISession session, string queueName)
-		{
-			if (queueName.EndsWith(".dlq"))
-				session.RegisterDlq(queueName);
-			else if (queueName.EndsWith(".outq"))
-				session.RegisterTopic(queueName);
-			else
-				session.RegisterQueue(queueName);
-		}
-
-		internal static bool Is404(this InvalidDestinationException  ex)
-		{
-			return ex.Message.Contains("code=404");
-		}
-
-		public static bool IsServerNamedQueue(this string queueName)
-		{
-			if (string.IsNullOrEmpty(queueName))
-			{
-				throw new ArgumentNullException("queueName");
-			}
-
-			var lowerCaseQueue = queueName.ToLower();
-			return lowerCaseQueue.StartsWith("amq.")
-				|| lowerCaseQueue.StartsWith(Messaging.QueueNames.TempMqPrefix);
-		}
-
-		public static void PopulateFromMessage(this IPrimitiveMap props, IMessage message)
-		{
-			//props.MessageId = message.Id.ToString();
-			//props.Timestamp = new AmqpTimestamp(message.CreatedDate.ToUnixTime());
-			//props.Priority = (byte)message.Priority;
-			//props.ContentType = MimeTypes.Json;
-
-			//if (message.Body != null)
-			//{
-			//	props.Type = message.Body.GetType().Name;
-			//}
-
-			//if (message.ReplyTo != null)
-			//{
-			//	props.ReplyTo = message.ReplyTo;
-			//}
-
-			//if (message.ReplyId != null)
-			//{
-			//	props.CorrelationId = message.ReplyId.Value.ToString();
-			//}
-
-			//if (message.Error != null)
-			//{
-			//	if (props.Headers == null)
-			//		props.Headers = new Dictionary<string, object>();
-			//	props.Headers["Error"] = message.Error.ToJson();
-			//}
-		}
-
 		public static Messaging.IMessage<T> ToMessage<T>(this Apache.NMS.IObjectMessage msgResult)
 		{
 			if (msgResult == null)
@@ -412,14 +235,5 @@ namespace ServiceStack.ActiveMq
 			return msg;
 		}
 
-		public static IEnumerable<Messaging.IMessageQueueClient> Bind<T>(IEnumerable<T> complexObjects)
-		{
-			return complexObjects.Select(obj => obj.Bind<T>());
-		}
-
-		public static Messaging.IMessageQueueClient Bind<T>(this T complexObjects)
-		{
-			return null;
-		}
 	}
 }

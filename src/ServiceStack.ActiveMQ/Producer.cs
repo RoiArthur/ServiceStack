@@ -17,6 +17,8 @@ namespace ServiceStack.ActiveMq
 
 		protected Messaging.IMessageHandler msgHandler;
 
+		public Func<object, string, string> ResolveQueueNameFn { get; internal set; }
+
 		public bool IsReceiver {
 			get
 			{
@@ -125,7 +127,7 @@ namespace ServiceStack.ActiveMq
 
 		public virtual void Publish(string queueName, ServiceStack.Messaging.IMessage message)
 		{
-			if (string.IsNullOrWhiteSpace(queueName)) queueName = Messaging.QueueNames.ResolveQueueNameFn(message.Body.GetType().Name, ".inq");
+			if (string.IsNullOrWhiteSpace(queueName)) queueName = this.ResolveQueueNameFn(this.msgHandler.MessageType.Name, ".outq");
 			Publish(queueName, message, Messaging.QueueNames.Exchange);
 		}
 
@@ -140,6 +142,7 @@ namespace ServiceStack.ActiveMq
 
 					IObjectMessage apacheMessage= producer.CreateMessage(message);
 					PublishMessageFilter?.Invoke(queueName, apacheMessage.Properties, message);
+
 					apacheMessage.Body = message.Body;
 					try
 					{
@@ -166,9 +169,6 @@ namespace ServiceStack.ActiveMq
 		{
 			// Close Listening Thread
 			cancellationTokenSource.Cancel();
-
-			//if (Destination != null)Destination.Dispose();
-			//if (DestinationDlq != null) Destination.Dispose();
 
 			if (Session != null) Session.Dispose();
 			this.State = System.Data.ConnectionState.Closed;
