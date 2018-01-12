@@ -55,9 +55,9 @@ namespace ServiceStack.Messaging
         public static string TopicIn = MqPrefix + "topic:in";
         public static string TopicOut = MqPrefix + "topic:out";
 
-        public static Func<string, string, string> ResolveQueueNameFn = ResolveQueueName;
+        public static Func<object, string, string> ResolveQueueNameFn = ResolveQueueName;
 
-        public static string ResolveQueueName(string typeName, string queueSuffix)
+        public static string ResolveQueueName(object typeName, string queueSuffix)
         {
             return QueuePrefix + MqPrefix + typeName + queueSuffix;
         }
