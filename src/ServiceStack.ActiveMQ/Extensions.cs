@@ -20,140 +20,6 @@ namespace ServiceStack.ActiveMq
 			return HostContext.TryResolve<Messaging.IMessageService>() as Server;
 		}
 
-		public static async Task<IConnection> GetConnectionAsync(this MessageFactory messageFactory)
-		{
-			IConnection connection = null;
-			Exception ex = null;
-			bool retry = false;
-			try
-			{
-				Log.Info($"Etablish connection to ActiveMQBroker {messageFactory.ConnectionFactory.BrokerUri}");
-				connection = messageFactory.ConnectionFactory.CreateConnection(messageFactory.UserName, messageFactory.Password);
-				connection.ClientId = messageFactory.GenerateConnectionId();
-
-				return connection;
-			}
-			catch (NMSConnectionException exc)
-			{
-				ex = exc;
-				retry = true;
-			}
-			catch (InvalidClientIDException exc)
-			{
-				ex = exc;
-			}
-			catch (Exception exc)
-			{
-				if (exc.Source != "Apache.NMS.Stomp") // Somme methods called by Apache.NMS to Stomp are not implemented
-				{
-					ex = exc;
-					throw;
-				}
-				else
-				{
-					Log.Warn(exc.Message);
-				}
-			}
-
-			if (retry)
-			{
-				Log.Warn($"[Worker {connection.ClientId}] > {ex.Message} - Retry in 5 seconds");
-				new System.Threading.AutoResetEvent(false).WaitOne(NMSConstants.defaultRequestTimeout);
-				return await GetConnectionAsync(messageFactory);            // Retry
-			}
-			else
-			{
-				Log.Error($"Could not connect to ActiveMQ [{messageFactory.ConnectionFactory.BrokerUri}]", ex.GetBaseException());
-			}
-			return null;
-		}
-
-		internal static async Task OpenAsync(this Producer connector)
-		{
-			string stage = "Entering method OpenAsync";
-
-			ConnectionInterruptedListener OnInterruption = new ConnectionInterruptedListener(() =>
-			{
-				connector.State = System.Data.ConnectionState.Broken;
-				connector.OnTransportError(new Apache.NMS.NMSConnectionException($"Connection to broker has been interrupted"));
-			});
-			ConnectionResumedListener OnResume = new ConnectionResumedListener(() =>
-			{
-				connector.State = System.Data.ConnectionState.Open;
-			});
-			///Occurs when a message could not be understood
-			ExceptionListener OnFetchError = new ExceptionListener((ex) =>
-			{
-				connector.OnMessagingError(ex);
-			});
-
-			connector.State = System.Data.ConnectionState.Connecting;
-			try
-			{
-				Log.Info($"Connecting ActiveMQ Broker... [{connector.Connection.ClientId}]");
-
-				connector.Connection.Start();
-				connector.Connection.ConnectionInterruptedListener += OnInterruption;
-				connector.Connection.ConnectionResumedListener += OnResume;
-				connector.Connection.ExceptionListener += OnFetchError;
-				connector.State = System.Data.ConnectionState.Open;
-
-				stage = $"starting session to broker [{connector.Connection.Dump()}]";
-				using (connector.Session = connector.Connection.CreateSession())
-				{
-					if(connector.IsReceiver) // QueueClient
-					{
-						connector.State = System.Data.ConnectionState.Fetching;
-					}
-					else // Producer
-					{
-						connector.State = System.Data.ConnectionState.Executing;
-					}
-
-					while (!connector.cancellationTokenSource.IsCancellationRequested) // Checks every half second wether Session must be closed
-					{
-						await Task.Delay(500, connector.cancellationTokenSource.Token);
-					}
-				}
-			}
-			catch (TaskCanceledException)
-			{
-				// Just leave
-			}
-			catch (Exception ex)
-			{
-				Log.Error($"An exception has occured while {stage} for {connector.Connection.Dump()} : {ex.Dump()});");
-			}
-			finally
-			{
-				connector.Connection.ConnectionInterruptedListener -= OnInterruption;
-				connector.Connection.ConnectionResumedListener -= OnResume;
-				connector.Connection.ExceptionListener -= OnFetchError;
-
-			}
-		}
-
-		public static async Task CloseAsync(this IConnection connection)
-		{
-
-			await Task.Factory.StartNew(() =>
-			{
-				Log.Debug($"Connection to ActiveMQ (Queue : {""} is shutting down");
-
-				//Close all MQClient queues !!!! Not implemented
-
-				if (connection != null)
-				{
-					if (connection.IsStarted)
-					{
-						connection.Stop();
-						connection.Close();
-					}
-					connection.Dispose();
-				}
-			});
-		}
-
 		public static Messaging.IMessage<T> ToMessage<T>(this Apache.NMS.IObjectMessage msgResult)
 		{
 			if (msgResult == null)
@@ -168,7 +34,7 @@ namespace ServiceStack.ActiveMq
 			message.CreatedDate = msgResult.NMSTimestamp;
 			message.Priority = (long)msgResult.NMSPriority;
 			message.ReplyTo = msgResult.NMSReplyTo==null?"": msgResult.NMSReplyTo.ToString();
-			message.Tag = msgResult.NMSDeliveryMode.ToString();
+			//message.Tag = msgResult.NMSDeliveryMode.ToString();
 			message.RetryAttempts = msgResult.NMSRedelivered ? 1 : 0;
 			if(msgResult is Apache.NMS.ActiveMQ.Commands.ActiveMQMessage)
 			{

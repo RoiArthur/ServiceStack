@@ -1,9 +1,10 @@
 ﻿using ServiceStack.Logging;
 using ServiceStack.Messaging;
+using ServiceStack.Text;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-
+using System.Threading.Tasks;
 
 namespace ServiceStack.ActiveMq
 {
@@ -11,7 +12,6 @@ namespace ServiceStack.ActiveMq
 	{
 
 		private static readonly ILog Log = LogManager.GetLogger(typeof(Server));
-
 
 		public const int DefaultRetryCount = 1; //Will be a total of 2 attempts
 
@@ -26,6 +26,30 @@ namespace ServiceStack.ActiveMq
 		/// Must be thread-safe.
 		/// </summary>
 		public Func<object, object> ResponseFilter { get; set; }
+
+		public bool isConnected
+		{
+			get
+			{
+				return handlerMap.Values.SelectMany(item => item.Item2)
+				  .Any(worker => ((MessageFactory)worker.messageFactory).isConnected());
+			}
+		}
+
+		public bool isStarted
+		{
+			get { return handlerMap.Values.SelectMany(item => item.Item2)
+					.Any(worker=>((MessageFactory)worker.messageFactory).isStarted()); }
+		}
+
+		public bool isFaultTolerant
+		{
+			get
+			{
+				return handlerMap.Values.SelectMany(item => item.Item2)
+				  .Any(worker => ((MessageFactory)worker.messageFactory).isFaultTolerant());
+			}
+		}
 
 		public Action<string, Apache.NMS.IPrimitiveMap, IMessage> PublishMessageFilter
 		{
@@ -48,7 +72,7 @@ namespace ServiceStack.ActiveMq
 		public Action<string, Dictionary<string, object>> CreateQueueFilter { get; set; }
 		public Action<string, Dictionary<string, object>> CreateTopicFilter { get; set; }
 
-		public Server(string connectionString = "tcp://localhost:61616", string username = null, string password = null): this(
+		public Server(string connectionString = "tcp://localhost:61616", string username = null, string password = null) : this(
 			new ActiveMq.MessageFactory(new Apache.NMS.NMSConnectionFactory(connectionString)))
 		{
 
@@ -122,7 +146,7 @@ namespace ServiceStack.ActiveMq
 			if (handlerMap.ContainsKey(typeof(T)))
 				throw new ArgumentException("Message handler has already been registered for type: " + typeof(T).Name);
 			//Checl licence validity before instantiating anything
-			LicenseUtils.AssertValidUsage(LicenseFeature.ServiceStack, QuotaType.Operations, handlerMap.Count +1);
+			LicenseUtils.AssertValidUsage(LicenseFeature.ServiceStack, QuotaType.Operations, handlerMap.Count + 1);
 
 			if (noOfThreads <= 0) noOfThreads = Environment.ProcessorCount;
 			IMessageHandlerFactory handlerMessageFactory = CreateMessageHandlerFactory<T>(processMessageFn, processExceptionEx);
@@ -135,11 +159,45 @@ namespace ServiceStack.ActiveMq
 			handlerMap.Select(kv => kv.Value)
 				.ToList()
 				.ForEach(async tuple => {
-					for(int i= 0;i< tuple.Item2.Length; i++)
+					for (int i = 0; i < tuple.Item2.Length; i++)
 					{
 						tuple.Item2[i] = await Worker.StartAsync(this, tuple.Item1);
 					}
-			}); ;
+				}); ;
+		}
+
+		static Random rnd = new Random();
+
+		/// <summary>
+		/// Used for SendOneWay client which does not register an MQClient
+		/// </summary>
+		private string QueueOut{get;set;}
+
+		public async Task<bool[]> SendAllAsync<T>(IEnumerable<T> messages)
+		{
+			return await Task.WhenAll(messages.ToList().Select(async msg=>await SendAsync(msg)).ToArray());
+		}
+
+		public async Task<bool> SendAsync<T>(T message)
+		{
+			if (!handlerMap.ContainsKey(typeof(T))) this.ErrorHandler(null, new InvalidOperationException($"No ServiceStack.ActiveMQ server has been registered for type {typeof(T).Name}"));
+			if (handlerMap[typeof(T)].Item2.Length == 0) this.ErrorHandler(null, new InvalidOperationException($"No ServiceStack.ActiveMQ worker has been registered for type {typeof(T).Name}"));
+			if (string.IsNullOrEmpty(QueueOut)) { QueueOut = this.ResolveQueueNameFn(message, ".outq"); }
+
+			return await Task.Factory.StartNew<bool>(() =>
+			{
+			try
+			{
+				int workerNumber = rnd.Next(handlerMap[typeof(T)].Item2.Length);
+				((Producer)handlerMap[typeof(T)].Item2[workerNumber].MQClient).Publish(this.QueueOut,Message<T>.Create(message));
+					return true;
+				}
+				catch (Exception ex)
+				{
+					this.ErrorHandler(null, new InvalidOperationException($"An error occured while sending message of type {typeof(T).Name}",ex));
+					return false;
+				}
+			});
 		}
 
 		public void Stop()
@@ -147,16 +205,51 @@ namespace ServiceStack.ActiveMq
 			handlerMap.Values.SelectMany(item=>item.Item2).ToList().ForEach(
 				worker =>
 				{
-					worker.Dispose();
+					if(worker!=null)//Warning worker can be null if appHost has been disposed, but no callback was added to dispose plugin
+					{
+						Log.Info($"Close connection to connector {((Producer)worker.MQClient).Connection.ClientId}");
+						worker.Dispose();
+						worker = null;
+					}
 				}
 			);
 		}
 
+		#region IDisposable Support
+		private bool disposedValue = false; // To detect redundant calls
+
+		protected virtual void Dispose(bool disposing)
+		{
+			if (!disposedValue)
+			{
+				if (disposing)
+				{
+					// Close Listening Thread
+					this.messageFactory.Dispose();
+				}
+				// TODO: free unmanaged resources (unmanaged objects) and override a finalizer below.
+				// TODO: set large fields to null.
+				disposedValue = true;
+			}
+		}
+
+		// TODO: override a finalizer only if Dispose(bool disposing) above has code to free unmanaged resources.
+		// ~Producer() {
+		//   // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
+		//   Dispose(false);
+		// }
+
+		// This code added to correctly implement the disposable pattern.
 		public void Dispose()
 		{
-			this.messageFactory.Dispose();
-			this.Dispose();
+			// Do not change this code. Put cleanup code in Dispose(bool disposing) above.
+			Dispose(true);
+			// TODO: uncomment the following line if the finalizer is overridden above.
+			GC.SuppressFinalize(this);
 			GC.Collect();
 		}
+		#endregion
+
+
 	}
 }

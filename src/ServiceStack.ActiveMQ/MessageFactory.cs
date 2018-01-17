@@ -1,8 +1,9 @@
 ﻿using Apache.NMS;
 using ServiceStack.Logging;
+using ServiceStack.Text;
 using System;
 using System.Collections.Generic;
-
+using System.Threading.Tasks;
 
 namespace ServiceStack.ActiveMq
 {
@@ -21,6 +22,11 @@ namespace ServiceStack.ActiveMq
 
 		internal MessageFactory(IConnectionFactory connectionFactory)
 		{
+			BuildConnectionFactory(connectionFactory);
+		}
+
+		private void BuildConnectionFactory(IConnectionFactory connectionFactory)
+		{
 			System.Diagnostics.Contracts.Contract.Requires(connectionFactory != null && connectionFactory.BrokerUri != null);
 			if (connectionFactory == null)
 				throw new ArgumentNullException(nameof(connectionFactory));
@@ -28,7 +34,7 @@ namespace ServiceStack.ActiveMq
 			try
 			{
 				this.ConnectionFactory = connectionFactory;
-				string prefix = $"{Environment.MachineName}-{System.Diagnostics.Process.GetCurrentProcess().ProcessName}";
+				string prefix = $"{System.Diagnostics.Process.GetCurrentProcess().ProcessName}-{Environment.MachineName}";
 				this.BrokerUri = connectionFactory.BrokerUri;
 
 				dynamic transport = null;
@@ -56,6 +62,53 @@ namespace ServiceStack.ActiveMq
 																		$"   - [Error : {ex.GetBaseException().Message}]" };
 				throw new InvalidOperationException(string.Join(Environment.NewLine, detailledError.ToArray()), ex.GetBaseException());
 			}
+		}
+
+		internal async Task<IConnection> GetConnectionAsync()
+		{
+			IConnection connection = null;
+			Exception ex = null;
+			bool retry = false;
+			try
+			{
+				Log.Info($"Etablish connection to ActiveMQBroker {this.ConnectionFactory.BrokerUri}");
+				connection = this.ConnectionFactory.CreateConnection(this.UserName, this.Password);
+				connection.ClientId = this.GenerateConnectionId();
+				return connection;
+			}
+			catch (NMSConnectionException exc)
+			{
+				ex = exc;
+				retry = true;
+			}
+			catch (InvalidClientIDException exc)
+			{
+				ex = exc;
+			}
+			catch (Exception exc)
+			{
+				if (exc.Source != "Apache.NMS.Stomp") // Somme methods called by Apache.NMS to Stomp are not implemented... in Apache.NMS.Stomp
+				{
+					ex = exc;
+					throw;
+				}
+				else
+				{
+					Log.Warn(exc.Message);
+				}
+			}
+
+			if (retry)
+			{
+				Log.Warn($"[Worker {connection.ClientId}] > {ex.Message} - Retry in 5 seconds");
+				new System.Threading.AutoResetEvent(false).WaitOne(NMSConstants.defaultRequestTimeout);
+				return await GetConnectionAsync();            // Retry
+			}
+			else
+			{
+				Log.Error($"Could not connect to ActiveMQ [{this.ConnectionFactory.BrokerUri}]", ex.GetBaseException());
+			}
+			return null;
 		}
 
 		public enum ConnectionType
@@ -101,7 +154,7 @@ namespace ServiceStack.ActiveMq
 
 	}
 
-	public virtual Messaging.IMessageProducer CreateMessageProducer()
+		public virtual Messaging.IMessageProducer CreateMessageProducer()
 	{
 		return new Producer(this)
 		{
@@ -111,9 +164,39 @@ namespace ServiceStack.ActiveMq
 		};
 	}
 
-	public void Dispose()
-	{
-			this.ConnectionFactory = null;
+		#region IDisposable Support
+		private bool disposedValue = false; // To detect redundant calls
+
+		protected virtual void Dispose(bool disposing)
+		{
+			if (!disposedValue)
+			{
+				if (disposing)
+				{
+					// Close Listening Thread
+					this.ConnectionFactory = null;
+				}
+				// TODO: free unmanaged resources (unmanaged objects) and override a finalizer below.
+				// TODO: set large fields to null.
+				disposedValue = true;
+			}
+		}
+
+		// TODO: override a finalizer only if Dispose(bool disposing) above has code to free unmanaged resources.
+		// ~Producer() {
+		//   // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
+		//   Dispose(false);
+		// }
+
+		// This code added to correctly implement the disposable pattern.
+		public void Dispose()
+		{
+			// Do not change this code. Put cleanup code in Dispose(bool disposing) above.
+			Dispose(true);
+			// TODO: uncomment the following line if the finalizer is overridden above.
+			GC.SuppressFinalize(this);
+			GC.Collect();
+		}
+		#endregion
 	}
-}
 }

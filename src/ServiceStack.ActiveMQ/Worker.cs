@@ -39,7 +39,7 @@ namespace ServiceStack.ActiveMq
 		{
 			try
 			{
-				await ((QueueClient)this.MQClient).StartAsync(handler);
+				await ((QueueClient)this.MQClient).StartAsync(handler,()=> messagesCount == int.MaxValue && !timeOut.HasValue);
 			}
 			catch (Exception ex)
 			{

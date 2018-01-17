@@ -1,16 +1,13 @@
-﻿using System;
+﻿using ServiceStack.Logging;
+using System;
 using System.Collections.Generic;
-using System.Threading;
 using System.Threading.Tasks;
-using Apache.NMS;
-using ServiceStack.Logging;
-using ServiceStack.Text;
 
 namespace ServiceStack.ActiveMq
 {
-    internal class Producer : ServiceStack.Messaging.IMessageProducer, IDisposable//, IOneWayClient
-    {
-        public static ILog Log = LogManager.GetLogger(typeof(Producer));
+	internal partial class Producer : ServiceStack.Messaging.IMessageProducer, IOneWayClient
+	{
+		public static ILog Log = LogManager.GetLogger(typeof(Producer));
 		internal const string MetaOriginMessage = "QueueMessage";
 
 		protected readonly MessageFactory msgFactory;
@@ -19,10 +16,11 @@ namespace ServiceStack.ActiveMq
 
 		public Func<object, string, string> ResolveQueueNameFn { get; internal set; }
 
-		public bool IsReceiver {
+		public bool IsReceiver
+		{
 			get
 			{
-				return this.GetType().IsSubclassOf(typeof(Producer)) ; // QueueClient
+				return this.GetType().IsSubclassOf(typeof(Producer)); // QueueClient
 			}
 		}
 
@@ -34,61 +32,14 @@ namespace ServiceStack.ActiveMq
 			}
 		}
 
-		public event EventHandler<System.Data.ConnectionState> ConnectionStateChanged;
-
-		protected Apache.NMS.DestinationType QueueType = Apache.NMS.DestinationType.Queue;
-
-		private System.Data.ConnectionState _state = System.Data.ConnectionState.Closed;
-		public System.Data.ConnectionState State
-		{
-			get
-			{
-				return _state;
-			}
-			internal set
-			{
-				bool raise = _state != value;
-				System.Data.ConnectionState oldstate = _state;
-				_state = value;
-				if (raise)
-				{
-					Log.Debug($"Active MQ Connector [{this.Connection.ClientId}] has changed from [{oldstate.ToString()}] to [{_state.ToString()}]");
-					if (ConnectionStateChanged != null) ConnectionStateChanged(this, value);
-				}
-			}
-		}
-
-		public Apache.NMS.ISession Session { get; internal set; }
-
-		private IConnection connection;
-		public IConnection Connection
-		{
-			get
-			{
-				if (connection == null)
-				{
-					connection = msgFactory.GetConnectionAsync().Result;
-				}
-				return connection;
-			}
-		}
-
-		internal CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
-
 		public Action OnPublishedCallback { get; set; }
 
 		public Action<string, Apache.NMS.IPrimitiveMap, ServiceStack.Messaging.IMessage> PublishMessageFilter { get; set; }
 		public Action<string, ServiceStack.Messaging.IMessage> GetMessageFilter { get; set; }
 
-		private IMessage ToActiveMQ(ISession session, IMessageProducer producer, IMessage message)
-		{
-			IObjectMessage obj = message as IObjectMessage;
-			obj.Body = JsonSerializer.SerializeToString(obj.Body);
-			return obj;
-		}
-
 		internal Producer(MessageFactory factory)
 		{
+			semaphoreConsumer = new System.Threading.SemaphoreSlim(1);
 			this.msgFactory = factory;
 		}
 
@@ -133,45 +84,59 @@ namespace ServiceStack.ActiveMq
 
 		private async void Publish(string queueName, ServiceStack.Messaging.IMessage message, string topic)
 		{
-			IDestination destination = Session.GetDestination(queueName);
-			await Task<bool>.Factory.StartNew(() => {
-				using (IMessageProducer producer = Session.CreateProducer(destination))
+			await Task<bool>.Factory.StartNew(() =>
+			{
+				using (Apache.NMS.IMessageProducer producer = this.GetProducer(queueName).Result)
 				{
-					producer.ProducerTransformer = ToActiveMQ;
 					this.State = System.Data.ConnectionState.Executing;
 
-					IObjectMessage apacheMessage= producer.CreateMessage(message);
+					Apache.NMS.IObjectMessage apacheMessage = producer.CreateMessage(message);
 					PublishMessageFilter?.Invoke(queueName, apacheMessage.Properties, message);
 
 					apacheMessage.Body = message.Body;
 					try
 					{
 						producer.Send(apacheMessage);
+						OnPublishedCallback?.Invoke();
 					}
-					catch (NMSException ex)
+					catch (Apache.NMS.NMSException ex)
 					{
 						ex = new Apache.NMS.NMSException($"Unable to send message of type {message.Body.GetType().Name}", ex);
-						throw ex;
+						this.OnTransportError(ex);
+						return false;
 					}
 					catch (Exception ex)
 					{
-						throw new Apache.NMS.MessageFormatException($"Unable to send message of type {message.Body.GetType().Name}", ex.GetBaseException());
+						ex = new Apache.NMS.MessageFormatException($"Unable to send message of type {message.Body.GetType().Name}", ex.GetBaseException());
+						this.OnMessagingError(ex);
+						return false;
 					}
-					
+
 					this.State = System.Data.ConnectionState.Fetching;
 				}
+					
 				return true;
 			});
-			OnPublishedCallback?.Invoke();
 		}
 
-		public virtual void Dispose()
+		public virtual void SendOneWay(object requestDto)
 		{
-			// Close Listening Thread
-			cancellationTokenSource.Cancel();
-
-			if (Session != null) Session.Dispose();
-			this.State = System.Data.ConnectionState.Closed;
+			Publish(Messaging.MessageFactory.Create(requestDto));
 		}
+
+		public virtual void SendOneWay(string queueName, object requestDto)
+		{
+			Publish(queueName, Messaging.MessageFactory.Create(requestDto));
+		}
+
+		public virtual void SendAllOneWay(IEnumerable<object> requests)
+		{
+			if (requests == null) return;
+			foreach (var request in requests)
+			{
+				SendOneWay(request);
+			}
+		}
+
 	}
 }
