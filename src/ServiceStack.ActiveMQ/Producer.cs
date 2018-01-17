@@ -41,6 +41,7 @@ namespace ServiceStack.ActiveMq
 		{
 			semaphoreConsumer = new System.Threading.SemaphoreSlim(1);
 			this.msgFactory = factory;
+			this.ConnectionName = "Not connected";
 		}
 
 		internal void OnMessagingError(Exception ex)

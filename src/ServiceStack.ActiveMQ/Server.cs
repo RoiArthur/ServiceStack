@@ -207,7 +207,6 @@ namespace ServiceStack.ActiveMq
 				{
 					if(worker!=null)//Warning worker can be null if appHost has been disposed, but no callback was added to dispose plugin
 					{
-						Log.Info($"Close connection to connector {((Producer)worker.MQClient).Connection.ClientId}");
 						worker.Dispose();
 						worker = null;
 					}

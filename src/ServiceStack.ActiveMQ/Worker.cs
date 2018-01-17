@@ -68,6 +68,7 @@ namespace ServiceStack.ActiveMq
 		{
 			if (!this.isDisposed)
 			{
+
 				this.MQClient.Dispose();
 				this.isDisposed = true;
 			}

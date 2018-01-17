@@ -37,6 +37,8 @@ namespace ServiceStack.ActiveMq
 
 		protected Apache.NMS.DestinationType QueueType = Apache.NMS.DestinationType.Queue;
 
+		public string ConnectionName {get;private set;}
+
 		public Apache.NMS.ISession Session { get; internal set; }
 
 		private IConnection connection;
@@ -67,7 +69,7 @@ namespace ServiceStack.ActiveMq
 				Log.Info($"Connecting ActiveMQ Broker... [{this.Connection.ClientId}]");
 
 				this.Connection.Start();
-
+				this.ConnectionName = this.Connection.ClientId;
 				this.Connection.ConnectionInterruptedListener += Connection_ConnectionInterruptedListener;
 				this.Connection.ConnectionResumedListener += Connection_ConnectionResumedListener;
 				this.Connection.ExceptionListener += Connection_ExceptionListener;
@@ -75,7 +77,7 @@ namespace ServiceStack.ActiveMq
 				this.State = System.Data.ConnectionState.Open;
 
 				stage = $"starting session to broker [{this.Connection.Dump()}]";
-				
+
 			}
 			catch (TaskCanceledException)
 			{
@@ -87,31 +89,26 @@ namespace ServiceStack.ActiveMq
 			}
 		}
 
-		internal async Task CloseAsync()
+		internal void CloseConnection()
 		{
-			if (this.Connection.IsStarted) return;
-			await Task.Factory.StartNew(() =>
+			//Log.Debug($"Connection to ActiveMQ (Queue : {Connection.ClientId} is shutting down");
+
+			this.Connection.ConnectionInterruptedListener -= Connection_ConnectionInterruptedListener;
+			this.Connection.ConnectionResumedListener -= Connection_ConnectionResumedListener;
+			this.Connection.ExceptionListener -= Connection_ExceptionListener;
+			//Close all MQClient queues !!!! Not implemented
+
+			if (Connection != null)
 			{
-
-				Log.Debug($"Connection to ActiveMQ (Queue : {Connection.ClientId} is shutting down");
-
-				this.Connection.ConnectionInterruptedListener -= Connection_ConnectionInterruptedListener;
-				this.Connection.ConnectionResumedListener -= Connection_ConnectionResumedListener;
-				this.Connection.ExceptionListener -= Connection_ExceptionListener;
-				//Close all MQClient queues !!!! Not implemented
-
-				if (Connection != null)
+				if (Connection.IsStarted)
 				{
-					if (Connection.IsStarted)
-					{
-						Connection.Stop();
-						Connection.Close();
-					}
-					Connection.Dispose();
+					Connection.Stop();
+					Connection.Close();
 				}
-			});
-		}
+				Connection.Dispose();
+			}
 
+		}
 
 		private void Connection_ExceptionListener(Exception exception)
 		{
@@ -132,7 +129,7 @@ namespace ServiceStack.ActiveMq
 		internal async Task OpenSessionAsync()
 		{
 			this.ConnectAsync();
-			if(this.Session!=null)
+			if (this.Session != null)
 			{
 				dynamic session = this.Session;
 				if (session.Started) return;
@@ -140,6 +137,7 @@ namespace ServiceStack.ActiveMq
 
 			using (this.Session = this.Connection.CreateSession())
 			{
+
 				if (this.IsReceiver) // QueueClient
 				{
 					this.State = System.Data.ConnectionState.Fetching;
@@ -196,7 +194,7 @@ namespace ServiceStack.ActiveMq
 			try
 			{
 				semaphoreConsumer.Wait();
-				if (_consumer != null)return _consumer;
+				if (_consumer != null) return _consumer;
 				destination = Apache.NMS.Util.SessionUtil.GetDestination(this.Session, queuename);
 				_consumer = this.Session.CreateConsumer(destination);
 				_consumer.ConsumerTransformer = this.ConsumerTransform;
@@ -263,8 +261,10 @@ namespace ServiceStack.ActiveMq
 				{
 					// Close Listening Thread
 					cancellationTokenSource.Cancel();
-					if (Session != null) Session.Dispose();
-					this.Session = null;
+					//this.Connection.Stop();
+					//this.Connection.Dispose();
+					Log.Info($"Close connection : [{this.ConnectionName}]");
+					this.Connection = null;
 					this.State = System.Data.ConnectionState.Closed;
 				}
 				// TODO: free unmanaged resources (unmanaged objects) and override a finalizer below.
