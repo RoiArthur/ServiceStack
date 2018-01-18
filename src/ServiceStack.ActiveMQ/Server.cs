@@ -72,8 +72,12 @@ namespace ServiceStack.ActiveMq
 		public Action<string, Dictionary<string, object>> CreateQueueFilter { get; set; }
 		public Action<string, Dictionary<string, object>> CreateTopicFilter { get; set; }
 
-		public Server(string connectionString = "tcp://localhost:61616", string username = null, string password = null) : this(
-			new ActiveMq.MessageFactory(new Apache.NMS.NMSConnectionFactory(connectionString)))
+		public Server(
+			string connectionString = "tcp://localhost:61616", 
+			string username = null, 
+			string password = null
+			) : 
+			this(new ActiveMq.MessageFactory(connectionString,username,password))
 		{
 
 		}

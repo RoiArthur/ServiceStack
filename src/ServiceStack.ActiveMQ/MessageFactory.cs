@@ -20,6 +20,20 @@ namespace ServiceStack.ActiveMq
 		public Action<string, Apache.NMS.IPrimitiveMap, ServiceStack.Messaging.IMessage> PublishMessageFilter { get; set; }
 		public Action<string, ServiceStack.Messaging.IMessage> GetMessageFilter { get; set; }
 
+		internal MessageFactory(string BrokerUri, string Username, string Password):
+			this(new Uri(BrokerUri), Username, Password)
+		{
+
+		}
+
+		internal MessageFactory(Uri BrokerUri, string Username, string Password)
+		{
+			IConnectionFactory connectionFactory = Apache.NMS.NMSConnectionFactory.CreateConnectionFactory(BrokerUri);
+			this.UserName = UserName;
+			this.Password = Password;
+			BuildConnectionFactory(connectionFactory);
+		}
+
 		internal MessageFactory(IConnectionFactory connectionFactory)
 		{
 			BuildConnectionFactory(connectionFactory);
@@ -42,12 +56,16 @@ namespace ServiceStack.ActiveMq
 				{
 					this.GenerateConnectionId = new Func<string>((new Apache.NMS.ActiveMQ.Util.IdGenerator(prefix)).GenerateSanitizedId);
 					transport = Apache.NMS.ActiveMQ.Transport.TransportFactory.CreateTransport(this.BrokerUri);
+					((Apache.NMS.ActiveMQ.ConnectionFactory)this.ConnectionFactory).UserName = this.UserName;
+					((Apache.NMS.ActiveMQ.ConnectionFactory)this.ConnectionFactory).UserName = this.Password;
 				}
 
 				if (this.TransportType == ConnectionType.STOMP)
 				{
 					this.GenerateConnectionId = new Func<string>((new Apache.NMS.Stomp.Util.IdGenerator(prefix)).GenerateSanitizedId);
 					transport = Apache.NMS.Stomp.Transport.TransportFactory.CreateTransport(this.BrokerUri);
+					((Apache.NMS.Stomp.ConnectionFactory)this.ConnectionFactory).UserName = this.UserName;
+					((Apache.NMS.Stomp.ConnectionFactory)this.ConnectionFactory).UserName = this.Password;
 				}
 
 				this.isConnected = new Func<bool>(() => transport.IsConnected);
@@ -127,8 +145,8 @@ namespace ServiceStack.ActiveMq
 		{
 			get
 			{
-				if (((Apache.NMS.NMSConnectionFactory)ConnectionFactory).ConnectionFactory is Apache.NMS.ActiveMQ.ConnectionFactory) return ConnectionType.ActiveMQ;
-				if (((Apache.NMS.NMSConnectionFactory)ConnectionFactory).ConnectionFactory is Apache.NMS.Stomp.ConnectionFactory) return ConnectionType.STOMP;
+				if (ConnectionFactory is Apache.NMS.ActiveMQ.ConnectionFactory) return ConnectionType.ActiveMQ;
+				if (ConnectionFactory is Apache.NMS.Stomp.ConnectionFactory) return ConnectionType.STOMP;
 				return ConnectionType.ActiveMQ;
 			}
 		}
