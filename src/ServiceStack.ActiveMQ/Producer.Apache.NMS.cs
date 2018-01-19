@@ -37,7 +37,7 @@ namespace ServiceStack.ActiveMq
 
 		protected Apache.NMS.DestinationType QueueType = Apache.NMS.DestinationType.Queue;
 
-		public string ConnectionName {get;private set;}
+		public string ConnectionName { get; private set; }
 
 		public Apache.NMS.ISession Session { get; internal set; }
 
@@ -138,7 +138,7 @@ namespace ServiceStack.ActiveMq
 			using (this.Session = this.Connection.CreateSession())
 			{
 
-				if (this.IsReceiver) // QueueClient
+				if (this.IsConsumer) // QueueClient
 				{
 					this.State = System.Data.ConnectionState.Fetching;
 				}
@@ -154,6 +154,7 @@ namespace ServiceStack.ActiveMq
 			}
 		}
 
+
 		#region Consumer
 		/// <summary>
 		// Turn received Message into expected type of the ServiceStackMessageHandler<T>
@@ -161,29 +162,31 @@ namespace ServiceStack.ActiveMq
 		/// <param name="apsession"></param>
 		/// <param name="producer"></param>
 		/// <param name="message"></param>
-		/// <returns></returns>
-		[System.Diagnostics.DebuggerStepThrough()]
-		private Apache.NMS.IObjectMessage ConsumerTransform(Apache.NMS.ISession apsession, Apache.NMS.IMessageConsumer consumer, Apache.NMS.IMessage message)
+		/// <returns>An Apache.NMS.IObjectMessage</returns>
+		internal Apache.NMS.ConsumerTransformerDelegate CreateConsumerTransformer()
 		{
-			//this step ensures this message is recognized as a valid object (POCO) message (Only deserializable)
-			try
+			return new Apache.NMS.ConsumerTransformerDelegate((apsession, consumer, message) =>
 			{
-				Apache.NMS.IObjectMessage msg = message as Apache.NMS.IObjectMessage;
-				if (msg != null)
+				try
 				{
-					return msg;
+					Apache.NMS.IObjectMessage msg = message as Apache.NMS.IObjectMessage;
+					if (msg != null)
+					{
+						return msg;
+					}
+					else
+					{
+						throw new Exception("Message could not be parsed as a valid Apache.NMS.IObjectMessage");
+					}
 				}
-				else
+				catch (Exception ex)
 				{
-					throw new Exception("Message could not be parsed as a valid Apache.NMS.IObjectMessage");
+					ex.Data.Add(Producer.MetaOriginMessage, message.ToString());
+					Apache.NMS.MessageNotReadableException exc = new Apache.NMS.MessageNotReadableException($"Unknown Message [{message.NMSMessageId}]: it was not a valid Json Object", ex);
+					throw exc;
 				}
-			}
-			catch (Exception ex)
-			{
-				ex.Data.Add(Producer.MetaOriginMessage, message.ToString());
-				Apache.NMS.MessageNotReadableException exc = new Apache.NMS.MessageNotReadableException($"Unknown Message [{message.NMSMessageId}]: it was not a valid Json Object", ex);
-				throw exc;
-			}
+
+			});
 		}
 
 		static SemaphoreSlim semaphoreConsumer = null;
@@ -194,11 +197,9 @@ namespace ServiceStack.ActiveMq
 			try
 			{
 				semaphoreConsumer.Wait();
-				if (_consumer != null) return _consumer;
 				destination = Apache.NMS.Util.SessionUtil.GetDestination(this.Session, queuename);
 				_consumer = this.Session.CreateConsumer(destination);
-				_consumer.ConsumerTransformer = this.ConsumerTransform;
-
+				_consumer.ConsumerTransformer = CreateConsumerTransformer();
 				Log.Debug($"A Consumer {_consumer.Dump()} has been created to listen on queue [{queuename}].");
 			}
 			catch (Exception ex)
@@ -214,7 +215,6 @@ namespace ServiceStack.ActiveMq
 		}
 
 		#endregion
-
 
 		#region Producer
 
@@ -289,9 +289,6 @@ namespace ServiceStack.ActiveMq
 			GC.Collect();
 		}
 		#endregion
-
-
-
 
 	}
 }

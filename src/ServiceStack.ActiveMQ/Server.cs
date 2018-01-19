@@ -38,8 +38,11 @@ namespace ServiceStack.ActiveMq
 
 		public bool isStarted
 		{
-			get { return handlerMap.Values.SelectMany(item => item.Item2)
-					.Any(worker=>((MessageFactory)worker.messageFactory).isStarted()); }
+			get
+			{
+				return handlerMap.Values.SelectMany(item => item.Item2)
+				  .Any(worker => ((MessageFactory)worker.messageFactory).isStarted());
+			}
 		}
 
 		public bool isFaultTolerant
@@ -73,11 +76,11 @@ namespace ServiceStack.ActiveMq
 		public Action<string, Dictionary<string, object>> CreateTopicFilter { get; set; }
 
 		public Server(
-			string connectionString = "tcp://localhost:61616", 
-			string username = null, 
+			string connectionString = "tcp://localhost:61616",
+			string username = null,
 			string password = null
-			) : 
-			this(new ActiveMq.MessageFactory(connectionString,username,password))
+			) :
+			this(new ActiveMq.MessageFactory(connectionString, username, password))
 		{
 
 		}
@@ -156,18 +159,21 @@ namespace ServiceStack.ActiveMq
 			IMessageHandlerFactory handlerMessageFactory = CreateMessageHandlerFactory<T>(processMessageFn, processExceptionEx);
 			handlerMap[typeof(T)] = new Tuple<IMessageHandlerFactory, Worker[]>(handlerMessageFactory, new Worker[noOfThreads]);
 
+
 		}
 
 		public void Start()
 		{
 			handlerMap.Select(kv => kv.Value)
 				.ToList()
-				.ForEach(async tuple => {
+				.ForEach(async tuple =>
+				{
 					for (int i = 0; i < tuple.Item2.Length; i++)
 					{
 						tuple.Item2[i] = await Worker.StartAsync(this, tuple.Item1);
 					}
-				}); ;
+				});
+			ServiceStack.HostContext.AppHost.Register<IMessageService>(this);
 		}
 
 		static Random rnd = new Random();
@@ -175,41 +181,43 @@ namespace ServiceStack.ActiveMq
 		/// <summary>
 		/// Used for SendOneWay client which does not register an MQClient
 		/// </summary>
-		private string QueueOut{get;set;}
+		private string QueueOut { get; set; }
 
-		public async Task<bool[]> SendAllAsync<T>(IEnumerable<T> messages)
+		public async Task<IMessage<T>[]> SendAllAsync<T>(IEnumerable<T> messages)
 		{
-			return await Task.WhenAll(messages.ToList().Select(async msg=>await SendAsync(msg)).ToArray());
+			return await Task.WhenAll(messages.ToList().Select(async msg => await SendAsync(msg)).ToArray());
 		}
 
-		public async Task<bool> SendAsync<T>(T message)
+		public async Task<IMessage<T>> SendAsync<T>(T message)
 		{
 			if (!handlerMap.ContainsKey(typeof(T))) this.ErrorHandler(null, new InvalidOperationException($"No ServiceStack.ActiveMQ server has been registered for type {typeof(T).Name}"));
 			if (handlerMap[typeof(T)].Item2.Length == 0) this.ErrorHandler(null, new InvalidOperationException($"No ServiceStack.ActiveMQ worker has been registered for type {typeof(T).Name}"));
 			if (string.IsNullOrEmpty(QueueOut)) { QueueOut = this.ResolveQueueNameFn(message, ".outq"); }
 
-			return await Task.Factory.StartNew<bool>(() =>
+			return await Task.Factory.StartNew<IMessage<T>>(() =>
 			{
-			try
-			{
-				int workerNumber = rnd.Next(handlerMap[typeof(T)].Item2.Length);
-				((Producer)handlerMap[typeof(T)].Item2[workerNumber].MQClient).Publish(this.QueueOut,Message<T>.Create(message));
-					return true;
+				var wrappedMessage = Message<T>.Create(message);
+				try
+				{
+					int workerNumber = rnd.Next(handlerMap[typeof(T)].Item2.Length);
+					
+					((Producer)handlerMap[typeof(T)].Item2[workerNumber].MQClient).Publish(this.QueueOut, wrappedMessage);
+					return (IMessage<T>)wrappedMessage;
 				}
 				catch (Exception ex)
 				{
-					this.ErrorHandler(null, new InvalidOperationException($"An error occured while sending message of type {typeof(T).Name}",ex));
-					return false;
+					this.ErrorHandler(null, new InvalidOperationException($"An error occured while sending message of type {typeof(T).Name}", ex));
+					return default(IMessage<T>);
 				}
 			});
 		}
 
 		public void Stop()
 		{
-			handlerMap.Values.SelectMany(item=>item.Item2).ToList().ForEach(
+			handlerMap.Values.SelectMany(item => item.Item2).ToList().ForEach(
 				worker =>
 				{
-					if(worker!=null)//Warning worker can be null if appHost has been disposed, but no callback was added to dispose plugin
+					if (worker != null)//Warning worker can be null if appHost has been disposed, but no callback was added to dispose plugin
 					{
 						worker.Dispose();
 						worker = null;

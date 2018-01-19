@@ -59,10 +59,11 @@ namespace ServiceStack.ActiveMq
 		/// <returns></returns>
 		public ServiceStack.Messaging.IMessage<T> GetAsync<T>(string queueName)
 		{
-			ServiceStack.Messaging.IMessage<T> response = null;
-			Apache.NMS.IMessageConsumer consumer = this.GetConsumer(queueName).Result;
-			Apache.NMS.MessageListener listener = new Apache.NMS.MessageListener((Apache.NMS.IMessage message) =>
+			using (Apache.NMS.IMessageConsumer consumer = this.GetConsumer(queueName).Result)
 			{
+				ServiceStack.Messaging.IMessage<T> response = null;
+				Apache.NMS.MessageListener listener = new Apache.NMS.MessageListener((Apache.NMS.IMessage message) =>
+				{
 					// After ConsumerTransform, message is a valid Apache.NMS.IObjectMessage
 					var msg = message as Apache.NMS.IObjectMessage;
 					try
@@ -77,16 +78,16 @@ namespace ServiceStack.ActiveMq
 						InvalidCastException Exception = new InvalidCastException($"The message could not be deserialized as a valid [{this.msgHandler.MessageType.Name}] message", ex);
 						this.OnMessagingError(Exception);
 					}
-			});
-			consumer.Listener += listener;
-			Log.Debug($"Message of type [{typeof(T)}] (InQ) are retrieved from queue: [{queueName}]");
-			while (!this.cancellationTokenSource.IsCancellationRequested && response == null)
-			{
-				Task.Delay(500);
+				});
+				consumer.Listener += listener;
+				Log.Debug($"Message of type [{typeof(T)}] (InQ) are retrieved from queue: [{queueName}]");
+				while (!this.cancellationTokenSource.IsCancellationRequested && response == null)
+				{
+					Task.Delay(500);
+				}
+				consumer.Listener -= listener;
+				return response;
 			}
-			consumer.Listener -= listener;
-
-			return response;
 		}
 
 		public void Notify(string queueName, ServiceStack.Messaging.IMessage message)

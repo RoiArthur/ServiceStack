@@ -16,7 +16,7 @@ namespace ServiceStack.ActiveMq
 
 		public Func<object, string, string> ResolveQueueNameFn { get; internal set; }
 
-		public bool IsReceiver
+		public bool IsConsumer
 		{
 			get
 			{
@@ -28,7 +28,7 @@ namespace ServiceStack.ActiveMq
 		{
 			get
 			{
-				return !this.IsReceiver; // Producer
+				return !this.IsConsumer; // Producer
 			}
 		}
 
@@ -61,10 +61,10 @@ namespace ServiceStack.ActiveMq
 
 		public void Publish<T>(T messageBody)
 		{
-			var message = messageBody as ServiceStack.Messaging.IMessage;
+			var message = messageBody as ServiceStack.Messaging.Message<T>;
 			if (message != null)
 			{
-				Publish(message.ToInQueueName(), message);
+				Publish((ServiceStack.Messaging.Message<T>)message);
 			}
 			else
 			{
@@ -74,12 +74,17 @@ namespace ServiceStack.ActiveMq
 
 		public void Publish<T>(ServiceStack.Messaging.IMessage<T> message)
 		{
-			Publish(message.ToInQueueName(), message);
+			Publish(null, message);
+		}
+
+		public void Publish<T>(ServiceStack.Messaging.Message<T> message)
+		{
+			Publish(null, message);
 		}
 
 		public virtual void Publish(string queueName, ServiceStack.Messaging.IMessage message)
 		{
-			if (string.IsNullOrWhiteSpace(queueName)) queueName = this.ResolveQueueNameFn(this.msgHandler.MessageType.Name, ".outq");
+			if (string.IsNullOrWhiteSpace(queueName)) queueName = this.ResolveQueueNameFn(message.Body, ".outq");
 			Publish(queueName, message, Messaging.QueueNames.Exchange);
 		}
 
