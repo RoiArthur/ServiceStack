@@ -155,11 +155,9 @@ namespace ServiceStack.ActiveMq
 			//Checl licence validity before instantiating anything
 			LicenseUtils.AssertValidUsage(LicenseFeature.ServiceStack, QuotaType.Operations, handlerMap.Count + 1);
 
-			if (noOfThreads <= 0) noOfThreads = Environment.ProcessorCount;
+			if (noOfThreads <= 0) noOfThreads = 1; // 1 is Best performances as Apache.NMS manages threading
 			IMessageHandlerFactory handlerMessageFactory = CreateMessageHandlerFactory<T>(processMessageFn, processExceptionEx);
 			handlerMap[typeof(T)] = new Tuple<IMessageHandlerFactory, Worker[]>(handlerMessageFactory, new Worker[noOfThreads]);
-
-
 		}
 
 		public void Start()
@@ -183,32 +181,32 @@ namespace ServiceStack.ActiveMq
 		/// </summary>
 		private string QueueOut { get; set; }
 
-		public async Task<IMessage<T>[]> SendAllAsync<T>(IEnumerable<T> messages)
+		public async Task<bool[]> SendAllAsync<T>(IEnumerable<T> messages)
 		{
 			return await Task.WhenAll(messages.ToList().Select(async msg => await SendAsync(msg)).ToArray());
 		}
 
-		public async Task<IMessage<T>> SendAsync<T>(T message)
+		public async Task<bool> SendAsync<T>(T message)
 		{
 			if (!handlerMap.ContainsKey(typeof(T))) this.ErrorHandler(null, new InvalidOperationException($"No ServiceStack.ActiveMQ server has been registered for type {typeof(T).Name}"));
 			if (handlerMap[typeof(T)].Item2.Length == 0) this.ErrorHandler(null, new InvalidOperationException($"No ServiceStack.ActiveMQ worker has been registered for type {typeof(T).Name}"));
 			if (string.IsNullOrEmpty(QueueOut)) { QueueOut = this.ResolveQueueNameFn(message, ".outq"); }
 
-			return await Task.Factory.StartNew<IMessage<T>>(() =>
+			return await Task.Factory.StartNew<bool>(() =>
 			{
-				var wrappedMessage = Message<T>.Create(message);
 				try
 				{
+
 					int workerNumber = rnd.Next(handlerMap[typeof(T)].Item2.Length);
-					
-					((Producer)handlerMap[typeof(T)].Item2[workerNumber].MQClient).Publish(this.QueueOut, wrappedMessage);
-					return (IMessage<T>)wrappedMessage;
+					Worker worker = handlerMap[typeof(T)].Item2[workerNumber];
+					worker.MQClient.Publish<T>(message);
+					return true;
 				}
 				catch (Exception ex)
 				{
 					this.ErrorHandler(null, new InvalidOperationException($"An error occured while sending message of type {typeof(T).Name}", ex));
-					return default(IMessage<T>);
 				}
+				return false;
 			});
 		}
 

@@ -10,15 +10,15 @@ namespace ServiceStack.ActiveMq
 		//private string QueueNames
 		internal QueueClient(MessageFactory messageFactory) : base(messageFactory)
 		{
-
+			semaphoreConsumer = new System.Threading.SemaphoreSlim(1);
 		}
 
-		public async Task StartAsync(Messaging.IMessageHandler handler, Func<bool> DoNext = null)
+		public async Task StartAsync(Messaging.IMessageHandlerFactory handlerFactory, Func<bool> DoNext = null)
 		{
-			base.msgHandler = handler;
+			base.msgHandler = handlerFactory.CreateMessageHandler();
 			if (DoNext == null) DoNext = new Func<bool>(() => true);
 			await Task.Factory.StartNew(async () => { await this.OpenSessionAsync(); }, cancellationTokenSource.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-			base.msgHandler.ProcessQueue(this, base.ResolveQueueNameFn(handler.MessageType.Name, ".inq"), DoNext);
+			base.msgHandler.ProcessQueue(this, base.ResolveQueueNameFn(base.msgHandler.MessageType.Name, ".inq"), DoNext);
 		}
 
 		public virtual void Ack(Messaging.IMessage message)

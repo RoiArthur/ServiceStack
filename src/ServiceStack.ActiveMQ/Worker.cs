@@ -8,8 +8,8 @@ namespace ServiceStack.ActiveMq
 	{
 		private static readonly ILog Log = LogManager.GetLogger(typeof(Worker));
 
+		internal readonly ServiceStack.Messaging.IMessageHandlerFactory messageHandlerFactory;
 		internal readonly ServiceStack.Messaging.IMessageFactory messageFactory;
-		internal readonly ServiceStack.Messaging.IMessageHandler messageHandler;
 
 		internal Action<Worker, Exception> ErrorHandler { get; set; }
 
@@ -26,20 +26,25 @@ namespace ServiceStack.ActiveMq
 			}
 		}
 
-		private Worker(ServiceStack.Messaging.IMessageFactory factory,
-			ServiceStack.Messaging.IMessageHandler handler,
-			Action<Worker, Exception> errorHandler)
+		private Worker(ServiceStack.Messaging.IMessageFactory messageFactory, ServiceStack.Messaging.IMessageHandlerFactory handlerFactory, Action<Worker, Exception> errorHandler)
 		{
-			this.messageFactory = factory;
-			this.messageHandler = handler;
+			this.messageFactory = messageFactory;
+			this.messageHandlerFactory = handlerFactory;
 			this.ErrorHandler = errorHandler;
 		}
 
-		internal async Task Subscribe(ServiceStack.Messaging.IMessageHandler handler, int messagesCount = int.MaxValue, TimeSpan? timeOut = null)
+		private static async Task<Worker> CreateWorkerAsync(Server service, ServiceStack.Messaging.IMessageHandlerFactory handlerFactory)
+		{
+			Worker client = new Worker(service.MessageFactory, handlerFactory, service.ErrorHandler);
+			await Task.Factory.StartNew(() => client.Subscribe());
+			return client;
+		}
+
+		internal async Task Subscribe(int messagesCount = int.MaxValue, TimeSpan? timeOut = null)
 		{
 			try
 			{
-				await ((QueueClient)this.MQClient).StartAsync(handler,()=> messagesCount == int.MaxValue && !timeOut.HasValue);
+				await ((QueueClient)this.MQClient).StartAsync(this.messageHandlerFactory, ()=> messagesCount == int.MaxValue && !timeOut.HasValue);
 			}
 			catch (Exception ex)
 			{
@@ -51,10 +56,7 @@ namespace ServiceStack.ActiveMq
 
 		internal static async Task<Worker> StartAsync(Server service, ServiceStack.Messaging.IMessageHandlerFactory factory)
 		{
-			ServiceStack.Messaging.IMessageHandler handler = factory.CreateMessageHandler();
-			Worker client = new Worker(service.MessageFactory, handler, service.ErrorHandler);
-			await Task.Factory.StartNew(() => client.Subscribe(handler));
-			return client;
+			return await CreateWorkerAsync(service,factory);
 		}
 
 		internal async Task CloseAsync()
@@ -68,7 +70,6 @@ namespace ServiceStack.ActiveMq
 		{
 			if (!this.isDisposed)
 			{
-
 				this.MQClient.Dispose();
 				this.isDisposed = true;
 			}

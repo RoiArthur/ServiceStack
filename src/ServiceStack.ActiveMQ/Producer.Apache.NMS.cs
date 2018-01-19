@@ -29,7 +29,7 @@ namespace ServiceStack.ActiveMq
 				_state = value;
 				if (raise)
 				{
-					Log.Debug($"Active MQ Connector [{this.Connection.ClientId}] has changed from [{oldstate.ToString()}] to [{_state.ToString()}]");
+					Log.Debug($"Active MQ Connector [{this.ConnectionName}] has changed from [{oldstate.ToString()}] to [{_state.ToString()}]");
 					if (ConnectionStateChanged != null) ConnectionStateChanged(this, value);
 				}
 			}
@@ -185,11 +185,10 @@ namespace ServiceStack.ActiveMq
 					Apache.NMS.MessageNotReadableException exc = new Apache.NMS.MessageNotReadableException($"Unknown Message [{message.NMSMessageId}]: it was not a valid Json Object", ex);
 					throw exc;
 				}
-
 			});
 		}
 
-		static SemaphoreSlim semaphoreConsumer = null;
+		protected static SemaphoreSlim semaphoreConsumer = null;
 		Apache.NMS.IMessageConsumer _consumer = null;
 		internal async Task<Apache.NMS.IMessageConsumer> GetConsumer(string queuename)
 		{
@@ -218,14 +217,18 @@ namespace ServiceStack.ActiveMq
 
 		#region Producer
 
-		private IMessage ProducerTransform(ISession session, IMessageProducer producer, IMessage message)
+
+		internal Apache.NMS.ProducerTransformerDelegate CreateProducerTransformer()
 		{
-			IObjectMessage obj = message as IObjectMessage;
-			obj.Body = JsonSerializer.SerializeToString(obj.Body);
-			return obj;
+			return new ProducerTransformerDelegate((session, producer, message) =>
+			{
+				IObjectMessage obj = message as IObjectMessage;
+				obj.Body = JsonSerializer.SerializeToString(obj.Body);
+				return obj;
+			});
 		}
 
-		private static SemaphoreSlim semaphoreConnector = new SemaphoreSlim(2); //Customer + Producer
+		static SemaphoreSlim semaphoreProducer = null;
 
 		internal async Task<Apache.NMS.IMessageProducer> GetProducer(string queuename)
 		{
@@ -233,20 +236,23 @@ namespace ServiceStack.ActiveMq
 			IDestination destination = null;
 			try
 			{
-				semaphoreConnector.Wait();
 				await OpenSessionAsync();
-
+				semaphoreProducer.Wait();
 				destination = this.Session.GetDestination(queuename);
 				_producer = this.Session.CreateProducer(destination);
-				_producer.ProducerTransformer = ProducerTransform;
-				semaphoreConnector.Release();
+				_producer.ProducerTransformer = CreateProducerTransformer();
+				return _producer;
+				//}
 			}
 			catch (Exception ex)
 			{
 				Log.Warn($"A problem occured while creating a Producer on queue {queuename}: {ex.GetBaseException().Message}");
 				return await GetProducer(queuename);
 			}
-			return _producer;
+			finally
+			{
+				semaphoreProducer.Release();
+			}
 		}
 		#endregion
 

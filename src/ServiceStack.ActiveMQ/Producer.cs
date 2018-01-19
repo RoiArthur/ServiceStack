@@ -39,7 +39,7 @@ namespace ServiceStack.ActiveMq
 
 		internal Producer(MessageFactory factory)
 		{
-			semaphoreConsumer = new System.Threading.SemaphoreSlim(1);
+			semaphoreProducer = new System.Threading.SemaphoreSlim(1);
 			this.msgFactory = factory;
 			this.ConnectionName = "Not connected";
 		}
