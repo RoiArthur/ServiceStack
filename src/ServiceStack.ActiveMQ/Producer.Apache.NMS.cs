@@ -100,7 +100,7 @@ namespace ServiceStack.ActiveMq
 			this.Connection.ExceptionListener -= Connection_ExceptionListener;
 			//Close all MQClient queues !!!! Not implemented
 
-			
+
 			Connection.Close();
 
 		}
@@ -162,24 +162,14 @@ namespace ServiceStack.ActiveMq
 		{
 			return new Apache.NMS.ConsumerTransformerDelegate((apsession, consumer, message) =>
 			{
-				try
+				Apache.NMS.IObjectMessage msg = message as Apache.NMS.IObjectMessage;
+				if (msg == null)
 				{
-					Apache.NMS.IObjectMessage msg = message as Apache.NMS.IObjectMessage;
-					if (msg != null)
-					{
-						return msg;
-					}
-					else
-					{
-						throw new Exception("Message could not be parsed as a valid Apache.NMS.IObjectMessage");
-					}
-				}
-				catch (Exception ex)
-				{
+					MessageNotReadableException ex = new MessageNotReadableException($"Message [{message.NMSMessageId}] could not be parsed as a valid Apache.NMS.IObjectMessage");
 					ex.Data.Add(Producer.MetaOriginMessage, message.ToString());
-					Apache.NMS.MessageNotReadableException exc = new Apache.NMS.MessageNotReadableException($"Unknown Message [{message.NMSMessageId}]: it was not a valid Json Object", ex);
-					throw exc;
+					this.OnMessagingError(ex);
 				}
+				return msg;
 			});
 		}
 

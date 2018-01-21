@@ -24,6 +24,9 @@ namespace ServiceStack.ActiveMq
 		{
 			if (msgResult == null)
 				return null;
+
+			msgResult.Body = (T)ServiceStack.Text.JsonSerializer.DeserializeFromString(msgResult.Body.ToString(), typeof(T));
+
 			Guid outValue = Guid.Empty;
 			var message = new Messaging.Message<T>((T)msgResult.Body);
 

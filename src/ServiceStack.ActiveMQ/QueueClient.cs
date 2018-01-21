@@ -23,12 +23,16 @@ namespace ServiceStack.ActiveMq
 
 		public virtual void Ack(Messaging.IMessage message)
 		{
+			if(this.Session.AcknowledgementMode == Apache.NMS.AcknowledgementMode.ClientAcknowledge)
+			{
+				((Apache.NMS.IMessage)message.Body).Acknowledge();
+			}
 			//message.Acknowledge();
 		}
 
 		public virtual void Nak(Messaging.IMessage message, bool requeue, Exception exception = null)
 		{
-
+			
 		}
 
 		public ServiceStack.Messaging.IMessage<T> CreateMessage<T>(object mqResponse)
@@ -70,16 +74,23 @@ namespace ServiceStack.ActiveMq
 		{
 			ServiceStack.Messaging.IMessage<T> response = null;
 			Log.Debug($"Message of type [{typeof(T)}] (InQ) are retrieved from queue: [{queueName}]");
+
 			
 			var msg = receiver() as Apache.NMS.IObjectMessage;
 			if (msg != null)
 			{
-				received++;
-				msg.Body = ServiceStack.Text.JsonSerializer.DeserializeFromString(msg.Body.ToString(), this.MessageHandler.MessageType);
 				response = CreateMessage<T>(msg);
-				GetMessageFilter?.Invoke(queueName, response);
-				handled++;
-				Console.Title = $"Messages received : {handled}/{received}";
+				if (response!=null)
+				{
+					received++;
+					GetMessageFilter?.Invoke(queueName, response);
+					handled++;
+					Console.Title = $"Messages received : {handled}/{received}";
+				}
+			}
+			if(response==null && !this.cancellationTokenSource.IsCancellationRequested) //Message was not an object T => Relaunch Listen
+			{
+				Get<T>(queueName, receiver);
 			}
 			while (!this.cancellationTokenSource.IsCancellationRequested && response == null)
 			{
