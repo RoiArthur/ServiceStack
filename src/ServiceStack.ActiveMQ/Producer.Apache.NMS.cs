@@ -30,7 +30,7 @@ namespace ServiceStack.ActiveMq
 				if (raise)
 				{
 					Log.Debug($"Active MQ Connector [{this.ConnectionName}] has changed from [{oldstate.ToString()}] to [{_state.ToString()}]");
-					if (ConnectionStateChanged != null) ConnectionStateChanged(this, value);
+					ConnectionStateChanged?.Invoke(this, value);
 				}
 			}
 		}
@@ -190,27 +190,34 @@ namespace ServiceStack.ActiveMq
 
 		protected static SemaphoreSlim semaphoreConsumer = null;
 		Apache.NMS.IMessageConsumer _consumer = null;
-		internal async Task<Apache.NMS.IMessageConsumer> GetConsumer(string queuename)
+		internal Apache.NMS.IMessageConsumer Consumer
 		{
-			Apache.NMS.IDestination destination = null;
-			try
+			get
 			{
-				semaphoreConsumer.Wait();
-				destination = Apache.NMS.Util.SessionUtil.GetDestination(this.Session, queuename);
-				_consumer = this.Session.CreateConsumer(destination);
-				_consumer.ConsumerTransformer = CreateConsumerTransformer();
-				Log.Debug($"A Consumer {_consumer.Dump()} has been created to listen on queue [{queuename}].");
+				if (_consumer == null)
+				{
+					string queuename = this.ResolveQueueNameFn(msgHandler.MessageType.Name, ".inq");
+					Apache.NMS.IDestination destination = null;
+					try
+					{
+						semaphoreConsumer.Wait();
+						destination = Apache.NMS.Util.SessionUtil.GetDestination(this.Session, queuename);
+						_consumer = this.Session.CreateConsumer(destination);
+						_consumer.ConsumerTransformer = CreateConsumerTransformer();
+						Log.Debug($"A Consumer {_consumer.Dump()} has been created to listen on queue [{queuename}].");
+					}
+					catch (Exception ex)
+					{
+						Log.Warn($"A problem occured while creating a Consumer on queue [{queuename}]: {ex.GetBaseException().Message}");
+						return _consumer;
+					}
+					finally
+					{
+						semaphoreConsumer.Release();
+					}
+				}
+				return _consumer;
 			}
-			catch (Exception ex)
-			{
-				Log.Warn($"A problem occured while creating a Consumer on queue [{queuename}]: {ex.GetBaseException().Message}");
-				return await GetConsumer(queuename);
-			}
-			finally
-			{
-				semaphoreConsumer.Release();
-			}
-			return _consumer;
 		}
 
 		#endregion
@@ -265,10 +272,12 @@ namespace ServiceStack.ActiveMq
 			{
 				if (disposing)
 				{
+					
 					// Close Listening Thread
 					cancellationTokenSource.Cancel();
 					//this.Connection.Stop();
 					//this.Connection.Dispose();
+					if (_consumer != null) _consumer.Dispose();
 					Log.Info($"Close connection : [{this.ConnectionName}]");
 					this.Connection = null;
 					this.State = System.Data.ConnectionState.Closed;

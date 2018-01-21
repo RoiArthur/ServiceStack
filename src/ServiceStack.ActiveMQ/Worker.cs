@@ -36,15 +36,17 @@ namespace ServiceStack.ActiveMq
 		private static async Task<Worker> CreateWorkerAsync(Server service, ServiceStack.Messaging.IMessageHandlerFactory handlerFactory)
 		{
 			Worker client = new Worker(service.MessageFactory, handlerFactory, service.ErrorHandler);
-			await Task.Factory.StartNew(() => client.Subscribe());
+			await Task.Factory.StartNew(() => client.Dequeue());
 			return client;
 		}
 
-		internal async Task Subscribe(int messagesCount = int.MaxValue, TimeSpan? timeOut = null)
+		internal async Task Dequeue(int messagesCount = int.MaxValue, TimeSpan? timeOut = null)
 		{
 			try
 			{
-				await ((QueueClient)this.MQClient).StartAsync(this.messageHandlerFactory, ()=> messagesCount == int.MaxValue && !timeOut.HasValue);
+				var queue = ((QueueClient)this.MQClient);
+				Func<bool> DoNext = () => messagesCount == int.MaxValue && !timeOut.HasValue;
+				await queue.StartAsync(this.messageHandlerFactory, DoNext);
 			}
 			catch (Exception ex)
 			{

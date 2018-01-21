@@ -13,13 +13,29 @@ namespace ServiceStack.ActiveMq
 			semaphoreConsumer = new System.Threading.SemaphoreSlim(1);
 		}
 
-		public async Task StartAsync(Messaging.IMessageHandlerFactory handlerFactory, Func<bool> DoNext = null)
+
+		public async Task StartAsync(Messaging.IMessageHandlerFactory handlerFactory, Func<bool> DoNext)
 		{
 			base.msgHandler = handlerFactory.CreateMessageHandler();
-			if (DoNext == null) DoNext = new Func<bool>(() => true);
-			await Task.Factory.StartNew(async () => { await this.OpenSessionAsync(); }, cancellationTokenSource.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-			base.msgHandler.ProcessQueue(this, base.ResolveQueueNameFn(base.msgHandler.MessageType.Name, ".inq"), DoNext);
+			await Task.Factory.StartNew(async () => { await this.OpenSessionAsync(); },
+				cancellationTokenSource.Token,
+				TaskCreationOptions.LongRunning,
+				TaskScheduler.Default);
+
+			if (DoNext())
+			{
+				string queueName = this.ResolveQueueNameFn(msgHandler.MessageType.Name, ".inq");
+				msgHandler.ProcessQueue(this, queueName, DoNext);
+			}
+			else
+			{
+				//Apache.NMS.IObjectMessage response = new Apache.NMS.M
+				//msgHandler.ProcessMessage(this, response);
+			}
+
 		}
+
+
 
 		public virtual void Ack(Messaging.IMessage message)
 		{
@@ -39,17 +55,20 @@ namespace ServiceStack.ActiveMq
 		public ServiceStack.Messaging.IMessage<T> Get<T>(string queueName, TimeSpan? timeSpanOut = null)
 		{
 			/// Manage timeout in that function
-			timeSpanOut = timeSpanOut.HasValue ? timeSpanOut.Value : Timeout.InfiniteTimeSpan;
-			ServiceStack.Messaging.IMessage<T> message = null;
-			Task task = Task.Factory.StartNew(() => { message = this.GetAsync<T>(queueName); });
-			bool success = task.Wait(timeSpanOut.Value);
-			if (success)
-			{
-				this.msgHandler.ProcessMessage(this, ((Apache.NMS.IObjectMessage)message));
-			}
-			return message;
+			//timeSpanOut = timeSpanOut.HasValue ? timeSpanOut.Value : Timeout.InfiniteTimeSpan;
+			//ServiceStack.Messaging.IMessage<T> message = null;
+			//Task task = Task.Factory.StartNew(() => { message = this.GetAsync<T>(queueName); });
+			//bool success = task.Wait(timeSpanOut.Value);
+			//if (success)
+			//{
+			//	this.msgHandler.ProcessMessage(this, ((Apache.NMS.IObjectMessage)message));
+			//}
+			//return message;
+			return null;
 		}
 
+		static int received = 0;
+		static int handled = 0;
 
 		/// <summary>
 		/// This method should be called asynchronously
@@ -59,35 +78,26 @@ namespace ServiceStack.ActiveMq
 		/// <returns></returns>
 		public ServiceStack.Messaging.IMessage<T> GetAsync<T>(string queueName)
 		{
-			using (Apache.NMS.IMessageConsumer consumer = this.GetConsumer(queueName).Result)
+			Apache.NMS.IMessageConsumer consumer = this.Consumer;
+			ServiceStack.Messaging.IMessage<T> response = null;
+			Log.Debug($"Message of type [{typeof(T)}] (InQ) are retrieved from queue: [{queueName}]");
+			while (!this.cancellationTokenSource.IsCancellationRequested && response == null)
 			{
-				ServiceStack.Messaging.IMessage<T> response = null;
-				Apache.NMS.MessageListener listener = new Apache.NMS.MessageListener((Apache.NMS.IMessage message) =>
+				var msg = consumer.ReceiveNoWait() as Apache.NMS.IObjectMessage;
+				if(msg!=null)
 				{
-					// After ConsumerTransform, message is a valid Apache.NMS.IObjectMessage
-					var msg = message as Apache.NMS.IObjectMessage;
-					try
-					{
-						msg.Body = ServiceStack.Text.JsonSerializer.DeserializeFromString(msg.Body.ToString(), this.msgHandler.MessageType);
-						response = CreateMessage<T>(msg);
-						GetMessageFilter?.Invoke(queueName, response);
-					}
-					catch (Exception ex)
-					{
-						ex.Data.Add("Message", message.ToString());
-						InvalidCastException Exception = new InvalidCastException($"The message could not be deserialized as a valid [{this.msgHandler.MessageType.Name}] message", ex);
-						this.OnMessagingError(Exception);
-					}
-				});
-				consumer.Listener += listener;
-				Log.Debug($"Message of type [{typeof(T)}] (InQ) are retrieved from queue: [{queueName}]");
-				while (!this.cancellationTokenSource.IsCancellationRequested && response == null)
-				{
-					Task.Delay(500);
+					received++;
+					msg.Body = ServiceStack.Text.JsonSerializer.DeserializeFromString(msg.Body.ToString(), this.msgHandler.MessageType);
+					response = CreateMessage<T>(msg);
+					GetMessageFilter?.Invoke(queueName, response);
 				}
-				consumer.Listener -= listener;
-				return response;
+				Task.Delay(500);
 			}
+			//consumer.Listener -= listener;
+			handled++;
+			Console.Title = $"Messages received : {handled}/{received}";
+			return response;
+
 		}
 
 		public void Notify(string queueName, ServiceStack.Messaging.IMessage message)
