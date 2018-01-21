@@ -1,6 +1,7 @@
 ﻿using ServiceStack.Logging;
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace ServiceStack.ActiveMq
@@ -10,9 +11,9 @@ namespace ServiceStack.ActiveMq
 		public static ILog Log = LogManager.GetLogger(typeof(Producer));
 		internal const string MetaOriginMessage = "QueueMessage";
 
-		protected readonly MessageFactory msgFactory;
+		internal Messaging.IMessageFactory MessageFactory { get; set; }
 
-		protected Messaging.IMessageHandler msgHandler;
+		internal Messaging.IMessageHandler MessageHandler { get; set; }
 
 		public Func<object, string, string> ResolveQueueNameFn { get; internal set; }
 
@@ -37,10 +38,11 @@ namespace ServiceStack.ActiveMq
 		public Action<string, Apache.NMS.IPrimitiveMap, ServiceStack.Messaging.IMessage> PublishMessageFilter { get; set; }
 		public Action<string, ServiceStack.Messaging.IMessage> GetMessageFilter { get; set; }
 
-		internal Producer(MessageFactory factory)
+		internal Producer()
 		{
 			semaphoreProducer = new System.Threading.SemaphoreSlim(1);
-			this.msgFactory = factory;
+			//this.MessageHandler = handlerFactory.CreateMessageHandler();
+			//this.MessageFactory = factory;
 			this.ConnectionName = "Not connected";
 		}
 
@@ -84,16 +86,20 @@ namespace ServiceStack.ActiveMq
 
 		public virtual void Publish(string queueName, ServiceStack.Messaging.IMessage message)
 		{
+			if (this.cancellationTokenSource.IsCancellationRequested) return;
 			if (string.IsNullOrWhiteSpace(queueName)) queueName = this.ResolveQueueNameFn(message.Body, ".outq");
 			Publish(queueName, message, Messaging.QueueNames.Exchange);
 		}
 
+		protected AutoResetEvent publishing = new AutoResetEvent(true);
 		private async void Publish(string queueName, ServiceStack.Messaging.IMessage message, string topic)
 		{
 			await Task<bool>.Factory.StartNew(() =>
 			{
+				
 				using (Apache.NMS.IMessageProducer producer = this.GetProducer(queueName).Result)
 				{
+					
 					this.State = System.Data.ConnectionState.Executing;
 
 					Apache.NMS.IObjectMessage apacheMessage = producer.CreateMessage(message);
@@ -120,7 +126,6 @@ namespace ServiceStack.ActiveMq
 
 					this.State = System.Data.ConnectionState.Fetching;
 				}
-					
 				return true;
 			});
 		}

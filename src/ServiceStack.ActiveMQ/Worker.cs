@@ -6,6 +6,27 @@ namespace ServiceStack.ActiveMq
 {
 	internal class Worker
 	{
+		/// <summary>
+		/// Creates and start a worker
+		/// </summary>
+		/// <param name="service"></param>
+		/// <param name="handlerFactory"></param>
+		/// <returns></returns>
+		internal static async Task<Worker> StartAsync(Server service, ServiceStack.Messaging.IMessageHandlerFactory handlerFactory)
+		{
+			Worker client = new Worker(handlerFactory, service.MessageFactory,  service.ErrorHandler);
+			await client.Dequeue();
+			return client;
+		}
+
+		
+		private Worker(ServiceStack.Messaging.IMessageHandlerFactory handlerFactory, ServiceStack.Messaging.IMessageFactory messageFactory, Action<Worker, Exception> errorHandler)
+		{
+			this.messageFactory = messageFactory;
+			this.messageHandlerFactory = handlerFactory;
+			this.ErrorHandler = errorHandler;
+		}
+
 		private static readonly ILog Log = LogManager.GetLogger(typeof(Worker));
 
 		internal readonly ServiceStack.Messaging.IMessageHandlerFactory messageHandlerFactory;
@@ -21,50 +42,45 @@ namespace ServiceStack.ActiveMq
 				if (client == null)
 				{
 					client = this.messageFactory.CreateMessageQueueClient();
+					((QueueClient)client).MessageFactory = messageFactory;
+					((QueueClient)client).MessageHandler = messageHandlerFactory.CreateMessageHandler();
 				}
 				return client;
 			}
 		}
 
-		private Worker(ServiceStack.Messaging.IMessageFactory messageFactory, ServiceStack.Messaging.IMessageHandlerFactory handlerFactory, Action<Worker, Exception> errorHandler)
-		{
-			this.messageFactory = messageFactory;
-			this.messageHandlerFactory = handlerFactory;
-			this.ErrorHandler = errorHandler;
-		}
-
-		private static async Task<Worker> CreateWorkerAsync(Server service, ServiceStack.Messaging.IMessageHandlerFactory handlerFactory)
-		{
-			Worker client = new Worker(service.MessageFactory, handlerFactory, service.ErrorHandler);
-			await Task.Factory.StartNew(() => client.Dequeue());
-			return client;
-		}
-
 		internal async Task Dequeue(int messagesCount = int.MaxValue, TimeSpan? timeOut = null)
 		{
-			try
-			{
-				var queue = ((QueueClient)this.MQClient);
-				Func<bool> DoNext = () => messagesCount == int.MaxValue && !timeOut.HasValue;
-				await queue.StartAsync(this.messageHandlerFactory, DoNext);
-			}
-			catch (Exception ex)
-			{
-				ErrorHandler?.Invoke(this, ex);
-				Log.Error("Could not START Active MQ Worker : ", ex);
-			}
+			Func<bool> DoNext = () => messagesCount == int.MaxValue && !timeOut.HasValue;
+			var queue = ((QueueClient)this.MQClient);
+			await Task.Factory.StartNew(async () => {
+				try
+				{
+					await queue.StartAsync();
+					string queueName = queue.ResolveQueueNameFn(queue.MessageHandler.MessageType.Name, ".inq");
+					if (DoNext())
+					{
+						queue.MessageHandler.ProcessQueue(queue, queueName, DoNext);
+					}
+					else
+					{
+						for (int i = 0; i < messagesCount; i++)
+						{
+							Messaging.IMessage message = null;
+							queue.MessageHandler.ProcessMessage(queue, message);
+						}
+					}
 
+				}
+				catch (Exception ex)
+				{
+					ErrorHandler?.Invoke(this, ex);
+					Log.Error("Could not START Active MQ Worker : ", ex);
+				}
+			});
 		}
 
-		internal static async Task<Worker> StartAsync(Server service, ServiceStack.Messaging.IMessageHandlerFactory factory)
-		{
-			return await CreateWorkerAsync(service,factory);
-		}
 
-		internal async Task CloseAsync()
-		{
-			await Task.Factory.StartNew(() => this.Dispose());
-		}
 		#region IDisposable Members
 
 		private bool isDisposed = false;
@@ -73,6 +89,7 @@ namespace ServiceStack.ActiveMq
 			if (!this.isDisposed)
 			{
 				this.MQClient.Dispose();
+				this.messageFactory.Dispose();
 				this.isDisposed = true;
 			}
 		}

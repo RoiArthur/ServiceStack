@@ -48,7 +48,7 @@ namespace ServiceStack.ActiveMq
 			{
 				if (connection == null)
 				{
-					connection = msgFactory.GetConnectionAsync().Result;
+					connection = ((MessageFactory)MessageFactory).GetConnectionAsync().Result;
 				}
 				return connection;
 			}
@@ -91,22 +91,17 @@ namespace ServiceStack.ActiveMq
 
 		internal void CloseConnection()
 		{
-			//Log.Debug($"Connection to ActiveMQ (Queue : {Connection.ClientId} is shutting down");
+			Log.Debug($"Connection to ActiveMQ (Queue : {this.ConnectionName} is shutting down");
+
+			Connection.Stop();
 
 			this.Connection.ConnectionInterruptedListener -= Connection_ConnectionInterruptedListener;
 			this.Connection.ConnectionResumedListener -= Connection_ConnectionResumedListener;
 			this.Connection.ExceptionListener -= Connection_ExceptionListener;
 			//Close all MQClient queues !!!! Not implemented
 
-			if (Connection != null)
-			{
-				if (Connection.IsStarted)
-				{
-					Connection.Stop();
-					Connection.Close();
-				}
-				Connection.Dispose();
-			}
+			
+			Connection.Close();
 
 		}
 
@@ -196,7 +191,7 @@ namespace ServiceStack.ActiveMq
 			{
 				if (_consumer == null)
 				{
-					string queuename = this.ResolveQueueNameFn(msgHandler.MessageType.Name, ".inq");
+					string queuename = this.ResolveQueueNameFn(MessageHandler.MessageType.Name, ".inq");
 					Apache.NMS.IDestination destination = null;
 					try
 					{
@@ -254,7 +249,7 @@ namespace ServiceStack.ActiveMq
 			catch (Exception ex)
 			{
 				Log.Warn($"A problem occured while creating a Producer on queue {queuename}: {ex.GetBaseException().Message}");
-				return await GetProducer(queuename);
+				return null;
 			}
 			finally
 			{
@@ -272,15 +267,15 @@ namespace ServiceStack.ActiveMq
 			{
 				if (disposing)
 				{
-					
+					Log.Info($"Close connection : [{this.ConnectionName}]");
 					// Close Listening Thread
 					cancellationTokenSource.Cancel();
-					//this.Connection.Stop();
-					//this.Connection.Dispose();
-					if (_consumer != null) _consumer.Dispose();
-					Log.Info($"Close connection : [{this.ConnectionName}]");
+					//Wait until Cancellation has been achieved
+					Task.Delay(500);
+
+					this.CloseConnection();
+					Connection.Dispose();
 					this.Connection = null;
-					this.State = System.Data.ConnectionState.Closed;
 				}
 				// TODO: free unmanaged resources (unmanaged objects) and override a finalizer below.
 				// TODO: set large fields to null.

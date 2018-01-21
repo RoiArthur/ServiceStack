@@ -1,6 +1,5 @@
 ﻿using Apache.NMS;
 using ServiceStack.Logging;
-using ServiceStack.Text;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -58,6 +57,8 @@ namespace ServiceStack.ActiveMq
 					transport = Apache.NMS.ActiveMQ.Transport.TransportFactory.CreateTransport(this.BrokerUri);
 					((Apache.NMS.ActiveMQ.ConnectionFactory)this.ConnectionFactory).UserName = this.UserName;
 					((Apache.NMS.ActiveMQ.ConnectionFactory)this.ConnectionFactory).UserName = this.Password;
+
+					
 				}
 
 				if (this.TransportType == ConnectionType.STOMP)
@@ -71,6 +72,8 @@ namespace ServiceStack.ActiveMq
 				this.isConnected = new Func<bool>(() => transport.IsConnected);
 				this.isFaultTolerant = new Func<bool>(() => transport.IsFaultTolerant);
 				this.isStarted = new Func<bool>(() => transport.IsStarted);
+
+				
 			}
 			catch (Exception ex)
 			{
@@ -163,7 +166,7 @@ namespace ServiceStack.ActiveMq
 
 		public virtual Messaging.IMessageQueueClient CreateMessageQueueClient()
 		{
-			return new QueueClient(this)
+			return new QueueClient()
 			{
 				PublishMessageFilter = PublishMessageFilter,
 				GetMessageFilter = GetMessageFilter,
@@ -174,8 +177,9 @@ namespace ServiceStack.ActiveMq
 
 		public virtual Messaging.IMessageProducer CreateMessageProducer()
 	{
-		return new Producer(this)
+		return new Producer()
 		{
+		    	 
 			PublishMessageFilter = PublishMessageFilter,
 			GetMessageFilter = GetMessageFilter,
 			ResolveQueueNameFn = ResolveQueueNameFn

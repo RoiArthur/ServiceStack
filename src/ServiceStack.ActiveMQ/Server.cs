@@ -27,12 +27,19 @@ namespace ServiceStack.ActiveMq
 		/// </summary>
 		public Func<object, object> ResponseFilter { get; set; }
 
+		internal IEnumerable<Worker> Workers
+		{
+			get
+			{
+				return handlerMap.Values.SelectMany(item => item.Item2);
+			}
+		}
+
 		public bool isConnected
 		{
 			get
 			{
-				return handlerMap.Values.SelectMany(item => item.Item2)
-				  .Any(worker => ((MessageFactory)worker.messageFactory).isConnected());
+				return Workers.Any(worker => ((MessageFactory)worker.messageFactory).isConnected());
 			}
 		}
 
@@ -40,8 +47,7 @@ namespace ServiceStack.ActiveMq
 		{
 			get
 			{
-				return handlerMap.Values.SelectMany(item => item.Item2)
-				  .Any(worker => ((MessageFactory)worker.messageFactory).isStarted());
+				return Workers.Any(worker => ((MessageFactory)worker.messageFactory).isStarted());
 			}
 		}
 
@@ -49,8 +55,7 @@ namespace ServiceStack.ActiveMq
 		{
 			get
 			{
-				return handlerMap.Values.SelectMany(item => item.Item2)
-				  .Any(worker => ((MessageFactory)worker.messageFactory).isFaultTolerant());
+				return Workers.Any(worker => ((MessageFactory)worker.messageFactory).isFaultTolerant());
 			}
 		}
 
@@ -212,7 +217,7 @@ namespace ServiceStack.ActiveMq
 
 		public void Stop()
 		{
-			handlerMap.Values.SelectMany(item => item.Item2).ToList().ForEach(
+			this.Workers.ToList().ForEach(
 				worker =>
 				{
 					if (worker != null)//Warning worker can be null if appHost has been disposed, but no callback was added to dispose plugin
