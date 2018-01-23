@@ -94,7 +94,7 @@ namespace ServiceStack.ActiveMq
 		protected AutoResetEvent publishing = new AutoResetEvent(true);
 		private async void Publish(string queueName, ServiceStack.Messaging.IMessage message, string topic)
 		{
-			await Task<bool>.Factory.StartNew(() =>
+			await Task.Factory.StartNew(() =>
 			{
 				
 				using (Apache.NMS.IMessageProducer producer = this.GetProducer(queueName).Result)
@@ -115,18 +115,17 @@ namespace ServiceStack.ActiveMq
 					{
 						ex = new Apache.NMS.NMSException($"Unable to send message of type {message.Body.GetType().Name}", ex);
 						this.OnTransportError(ex);
-						return false;
+						throw ex;
 					}
 					catch (Exception ex)
 					{
 						ex = new Apache.NMS.MessageFormatException($"Unable to send message of type {message.Body.GetType().Name}", ex.GetBaseException());
 						this.OnMessagingError(ex);
-						return false;
+						throw ex;
 					}
 
 					this.State = System.Data.ConnectionState.Fetching;
 				}
-				return true;
 			});
 		}
 
