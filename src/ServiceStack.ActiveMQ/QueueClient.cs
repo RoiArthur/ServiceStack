@@ -40,9 +40,6 @@ namespace ServiceStack.ActiveMq
 			return ((Apache.NMS.IObjectMessage)mqResponse).ToMessage<T>();
 		}
 
-		static int received = 0;
-		static int handled = 0;
-
 		public ServiceStack.Messaging.IMessage<T> Get<T>(string queueName, TimeSpan? timeSpanOut = null)
 		{
 			if (timeSpanOut == null) timeSpanOut = Timeout.InfiniteTimeSpan;
@@ -82,10 +79,7 @@ namespace ServiceStack.ActiveMq
 				response = CreateMessage<T>(msg);
 				if (response!=null)
 				{
-					received++;
 					GetMessageFilter?.Invoke(queueName, response);
-					handled++;
-					Console.Title = $"Messages received : {handled}/{received}";
 				}
 			}
 			if(response==null && !this.cancellationTokenSource.IsCancellationRequested) //Message was not an object T => Relaunch Listen

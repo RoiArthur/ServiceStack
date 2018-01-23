@@ -91,17 +91,24 @@ namespace ServiceStack.ActiveMq
 
 		internal void CloseConnection()
 		{
-			Log.Debug($"Connection to ActiveMQ (Queue : {this.ConnectionName} is shutting down");
+			Log.Warn($"Connection to ActiveMQ (Queue : {this.ConnectionName} is shutting down");
 
-			Connection.Stop();
+			if(connection!=null)
+			{
+				connection.Stop();
 
-			this.Connection.ConnectionInterruptedListener -= Connection_ConnectionInterruptedListener;
-			this.Connection.ConnectionResumedListener -= Connection_ConnectionResumedListener;
-			this.Connection.ExceptionListener -= Connection_ExceptionListener;
-			//Close all MQClient queues !!!! Not implemented
+				connection.ConnectionInterruptedListener -= Connection_ConnectionInterruptedListener;
+				connection.ConnectionResumedListener -= Connection_ConnectionResumedListener;
+				connection.ExceptionListener -= Connection_ExceptionListener;
+				//Close all MQClient queues !!!! Not implemented
 
 
-			Connection.Close();
+				connection.Close();
+
+				connection.Dispose();
+				connection = null;
+			}
+			
 
 		}
 
@@ -132,7 +139,6 @@ namespace ServiceStack.ActiveMq
 
 			using (this.Session = this.Connection.CreateSession())
 			{
-
 				if (this.IsConsumer) // QueueClient
 				{
 					this.State = System.Data.ConnectionState.Fetching;
@@ -233,11 +239,12 @@ namespace ServiceStack.ActiveMq
 				destination = this.Session.GetDestination(queuename);
 				_producer = this.Session.CreateProducer(destination);
 				_producer.ProducerTransformer = CreateProducerTransformer();
+
 				return _producer;
-				//}
 			}
 			catch (Exception ex)
 			{
+				System.Diagnostics.Debugger.Break();
 				Log.Warn($"A problem occured while creating a Producer on queue {queuename}: {ex.GetBaseException().Message}");
 				return null;
 			}
@@ -264,8 +271,6 @@ namespace ServiceStack.ActiveMq
 					Task.Delay(500);
 
 					this.CloseConnection();
-					Connection.Dispose();
-					this.Connection = null;
 				}
 				// TODO: free unmanaged resources (unmanaged objects) and override a finalizer below.
 				// TODO: set large fields to null.

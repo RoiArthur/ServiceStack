@@ -1,12 +1,13 @@
 ﻿using Apache.NMS;
 using ServiceStack.Logging;
+using ServiceStack.Messaging;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace ServiceStack.ActiveMq
 {
-	public class MessageFactory : ServiceStack.Messaging.IMessageFactory
+	public class MessageFactory : ServiceStack.Messaging.IMessageFactory//, Messaging.IMessageHandlerStats
 	{
 		private static readonly ILog Log = LogManager.GetLogger(typeof(MessageFactory));
 
@@ -56,8 +57,7 @@ namespace ServiceStack.ActiveMq
 					this.GenerateConnectionId = new Func<string>((new Apache.NMS.ActiveMQ.Util.IdGenerator(prefix)).GenerateSanitizedId);
 					transport = Apache.NMS.ActiveMQ.Transport.TransportFactory.CreateTransport(this.BrokerUri);
 					((Apache.NMS.ActiveMQ.ConnectionFactory)this.ConnectionFactory).UserName = this.UserName;
-					((Apache.NMS.ActiveMQ.ConnectionFactory)this.ConnectionFactory).UserName = this.Password;
-
+					((Apache.NMS.ActiveMQ.ConnectionFactory)this.ConnectionFactory).Password = this.Password;
 					
 				}
 
@@ -66,7 +66,7 @@ namespace ServiceStack.ActiveMq
 					this.GenerateConnectionId = new Func<string>((new Apache.NMS.Stomp.Util.IdGenerator(prefix)).GenerateSanitizedId);
 					transport = Apache.NMS.Stomp.Transport.TransportFactory.CreateTransport(this.BrokerUri);
 					((Apache.NMS.Stomp.ConnectionFactory)this.ConnectionFactory).UserName = this.UserName;
-					((Apache.NMS.Stomp.ConnectionFactory)this.ConnectionFactory).UserName = this.Password;
+					((Apache.NMS.Stomp.ConnectionFactory)this.ConnectionFactory).Password = this.Password;
 				}
 
 				this.isConnected = new Func<bool>(() => transport.IsConnected);
@@ -164,6 +164,7 @@ namespace ServiceStack.ActiveMq
 
 		public Func<bool> isStarted { get; private set; }
 
+
 		public virtual Messaging.IMessageQueueClient CreateMessageQueueClient()
 		{
 			return new QueueClient()
@@ -173,18 +174,18 @@ namespace ServiceStack.ActiveMq
 				ResolveQueueNameFn = ResolveQueueNameFn
 			};
 
-	}
+		}
 
 		public virtual Messaging.IMessageProducer CreateMessageProducer()
-	{
-		return new Producer()
 		{
-		    	 
-			PublishMessageFilter = PublishMessageFilter,
-			GetMessageFilter = GetMessageFilter,
-			ResolveQueueNameFn = ResolveQueueNameFn
-		};
-	}
+			return new Producer()
+			{
+
+				PublishMessageFilter = PublishMessageFilter,
+				GetMessageFilter = GetMessageFilter,
+				ResolveQueueNameFn = ResolveQueueNameFn
+			};
+		}
 
 		#region IDisposable Support
 		private bool disposedValue = false; // To detect redundant calls
@@ -219,6 +220,12 @@ namespace ServiceStack.ActiveMq
 			GC.SuppressFinalize(this);
 			GC.Collect();
 		}
+
+		public void Add(IMessageHandlerStats stats)
+		{
+			throw new NotImplementedException();
+		}
 		#endregion
+
 	}
 }
