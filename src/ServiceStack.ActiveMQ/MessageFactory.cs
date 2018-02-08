@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace ServiceStack.ActiveMq
 {
-	public class MessageFactory : ServiceStack.Messaging.IMessageFactory//, Messaging.IMessageHandlerStats
+	public class MessageFactory : ServiceStack.Messaging.IMessageFactory
 	{
 		private static readonly ILog Log = LogManager.GetLogger(typeof(MessageFactory));
 
@@ -20,7 +20,7 @@ namespace ServiceStack.ActiveMq
 		public Action<string, Apache.NMS.IPrimitiveMap, ServiceStack.Messaging.IMessage> PublishMessageFilter { get; set; }
 		public Action<string, ServiceStack.Messaging.IMessage> GetMessageFilter { get; set; }
 
-		internal MessageFactory(string BrokerUri, string Username, string Password):
+		internal MessageFactory(string BrokerUri, string Username, string Password) :
 			this(new Uri(BrokerUri), Username, Password)
 		{
 
@@ -58,7 +58,6 @@ namespace ServiceStack.ActiveMq
 					transport = Apache.NMS.ActiveMQ.Transport.TransportFactory.CreateTransport(this.BrokerUri);
 					((Apache.NMS.ActiveMQ.ConnectionFactory)this.ConnectionFactory).UserName = this.UserName;
 					((Apache.NMS.ActiveMQ.ConnectionFactory)this.ConnectionFactory).Password = this.Password;
-					
 				}
 
 				if (this.TransportType == ConnectionType.STOMP)
@@ -164,23 +163,20 @@ namespace ServiceStack.ActiveMq
 
 		public Func<bool> isStarted { get; private set; }
 
-
 		public virtual Messaging.IMessageQueueClient CreateMessageQueueClient()
 		{
-			return new QueueClient()
+			return new QueueClient(this)
 			{
 				PublishMessageFilter = PublishMessageFilter,
 				GetMessageFilter = GetMessageFilter,
 				ResolveQueueNameFn = ResolveQueueNameFn
 			};
-
 		}
 
 		public virtual Messaging.IMessageProducer CreateMessageProducer()
 		{
-			return new Producer()
+			return new Producer(this)
 			{
-
 				PublishMessageFilter = PublishMessageFilter,
 				GetMessageFilter = GetMessageFilter,
 				ResolveQueueNameFn = ResolveQueueNameFn

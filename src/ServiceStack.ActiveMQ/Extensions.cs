@@ -10,7 +10,6 @@ namespace ServiceStack.ActiveMq
 	public static class ActiveMqExtensions
     {
 
-		private static readonly ILog Log = LogManager.GetLogger(typeof(MessageFactory));
 
 		private static Server GetActiveMqServer()
 		{
@@ -31,56 +30,31 @@ namespace ServiceStack.ActiveMq
 			var message = new Messaging.Message<T>((T)msgResult.Body);
 
 			message.Meta = new Dictionary<string, string>();
-			message.Meta[QueueClient.MetaOriginMessage]= msgResult.NMSDestination.ToString();
 
 			if (Guid.TryParse(msgResult.NMSMessageId, out outValue)) message.Id = outValue;
+			message.Meta.Add("Origin", msgResult.NMSDestination.ToString());
 			message.CreatedDate = msgResult.NMSTimestamp;
 			message.Priority = (long)msgResult.NMSPriority;
 			message.ReplyTo = msgResult.NMSReplyTo==null?"": msgResult.NMSReplyTo.ToString();
-			//message.Tag = msgResult.NMSDeliveryMode.ToString();
+			message.Tag = msgResult.NMSDeliveryMode.ToString();
 			message.RetryAttempts = msgResult.NMSRedelivered ? 1 : 0;
+
 			if(msgResult is Apache.NMS.ActiveMQ.Commands.ActiveMQMessage)
 			{
 				message.RetryAttempts = ((Apache.NMS.ActiveMQ.Commands.ActiveMQMessage)msgResult).NMSXDeliveryCount;
 			}
 
 			if(Guid.TryParse(msgResult.NMSCorrelationID, out outValue)) message.ReplyId = outValue;
+
+
+			// Add metadata (properties) to message
 			var keyEnumerator = msgResult.Properties.Keys.GetEnumerator();
 			while(keyEnumerator.MoveNext())
 			{
 				message.Meta[keyEnumerator.Current.ToString()] = msgResult.Properties[keyEnumerator.Current.ToString()] == null ? null :
 					Text.JsonSerializer.SerializeToString(msgResult.Properties[keyEnumerator.Current.ToString()]);
 			}
-			//if (props.Headers != null)
-			//{
-			//	foreach (var entry in props.Headers)
-			//	{
-			//		if (entry.Key == "Error")
-			//		{
-			//			var errors = entry.Value;
-			//			if (errors != null)
-			//			{
-			//				var errorBytes = errors as byte[];
-			//				var errorsJson = errorBytes != null
-			//					? errorBytes.FromUtf8Bytes()
-			//					: errors.ToString();
-			//				message.Error = errorsJson.FromJson<ResponseStatus>();
-			//			}
-			//		}
-			//		else
-			//		{
-			//			if (message.Meta == null)
-			//				message.Meta = new Dictionary<string, string>();
-
-			//			var bytes = entry.Value as byte[];
-			//			var value = bytes != null
-			//				? bytes.FromUtf8Bytes()
-			//				: entry.Value?.ToString();
-
-			//			message.Meta[entry.Key] = value;
-			//		}
-			//	}
-			//}
+			
 
 			return message;
 		}

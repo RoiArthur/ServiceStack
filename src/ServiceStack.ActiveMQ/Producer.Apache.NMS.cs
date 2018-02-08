@@ -169,10 +169,12 @@ namespace ServiceStack.ActiveMq
 			return new Apache.NMS.ConsumerTransformerDelegate((apsession, consumer, message) =>
 			{
 				Apache.NMS.IObjectMessage msg = message as Apache.NMS.IObjectMessage;
+				this.TotalNormalMessagesReceived++;
+				if(message.NMSPriority == MsgPriority.AboveNormal) this.TotalPriorityMessagesReceived++;
+
 				if (msg == null)
 				{
 					MessageNotReadableException ex = new MessageNotReadableException($"Message [{message.NMSMessageId}] could not be parsed as a valid Apache.NMS.IObjectMessage");
-					ex.Data.Add(Producer.MetaOriginMessage, message.ToString());
 					this.OnMessagingError(ex);
 				}
 				return msg;
@@ -188,6 +190,7 @@ namespace ServiceStack.ActiveMq
 				if (_consumer == null)
 				{
 					string queuename = this.ResolveQueueNameFn(MessageHandler.MessageType.Name, ".inq");
+					this.QueueName = queuename;
 					Apache.NMS.IDestination destination = null;
 					try
 					{
@@ -195,6 +198,7 @@ namespace ServiceStack.ActiveMq
 						destination = Apache.NMS.Util.SessionUtil.GetDestination(this.Session, queuename);
 						_consumer = this.Session.CreateConsumer(destination);
 						_consumer.ConsumerTransformer = CreateConsumerTransformer();
+
 						Log.Debug($"A Consumer {_consumer.Dump()} has been created to listen on queue [{queuename}].");
 					}
 					catch (Exception ex)
@@ -211,6 +215,8 @@ namespace ServiceStack.ActiveMq
 			}
 		}
 
+		public string QueueName { get; private set; }
+
 		#endregion
 
 		#region Producer
@@ -222,6 +228,7 @@ namespace ServiceStack.ActiveMq
 			{
 				IObjectMessage obj = message as IObjectMessage;
 				obj.Body = JsonSerializer.SerializeToString(obj.Body);
+		
 				return obj;
 			});
 		}
@@ -230,17 +237,25 @@ namespace ServiceStack.ActiveMq
 
 		internal async Task<Apache.NMS.IMessageProducer> GetProducer(string queuename)
 		{
+			this.QueueName = queuename;
 			Apache.NMS.IMessageProducer _producer = null;
 			IDestination destination = null;
 			try
 			{
-				await OpenSessionAsync();
-				semaphoreProducer.Wait();
-				destination = this.Session.GetDestination(queuename);
-				_producer = this.Session.CreateProducer(destination);
-				_producer.ProducerTransformer = CreateProducerTransformer();
+				if(!this.cancellationTokenSource.IsCancellationRequested)
+					{
+					await OpenSessionAsync();
+					semaphoreProducer.Wait();
+					destination = this.Session.GetDestination(queuename);
+					_producer = this.Session.CreateProducer(destination);
+					if (_producer != default(Apache.NMS.IMessageProducer)) _producer.ProducerTransformer = CreateProducerTransformer();
 
-				return _producer;
+					return _producer;
+				}
+				else
+				{
+					return null;
+				}
 			}
 			catch (Exception ex)
 			{

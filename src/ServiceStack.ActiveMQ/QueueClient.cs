@@ -8,7 +8,7 @@ namespace ServiceStack.ActiveMq
 	internal class QueueClient : Producer, ServiceStack.Messaging.IMessageQueueClient
 	{
 		//private string QueueNames
-		internal QueueClient()
+		internal QueueClient(MessageFactory factory):base(factory)
 		{
 			semaphoreConsumer = new System.Threading.SemaphoreSlim(1);
 		}
@@ -80,7 +80,10 @@ namespace ServiceStack.ActiveMq
 				if (response!=null)
 				{
 					GetMessageFilter?.Invoke(queueName, response);
+					this.TotalMessagesProcessed++;
+					this.LastMessageProcessed = DateTime.Now;
 				}
+				
 			}
 			if(response==null && !this.cancellationTokenSource.IsCancellationRequested) //Message was not an object T => Relaunch Listen
 			{

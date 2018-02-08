@@ -1,4 +1,5 @@
 ﻿using ServiceStack.Logging;
+using ServiceStack.Messaging;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -6,10 +7,9 @@ using System.Threading.Tasks;
 
 namespace ServiceStack.ActiveMq
 {
-	internal partial class Producer : ServiceStack.Messaging.IMessageProducer, IOneWayClient
+	internal partial class Producer : ServiceStack.Messaging.IMessageProducer, IOneWayClient, Messaging.IMessageHandlerStats
 	{
 		public static ILog Log = LogManager.GetLogger(typeof(Producer));
-		internal const string MetaOriginMessage = "QueueMessage";
 
 		internal Messaging.IMessageFactory MessageFactory { get; set; }
 
@@ -38,11 +38,11 @@ namespace ServiceStack.ActiveMq
 		public Action<string, Apache.NMS.IPrimitiveMap, ServiceStack.Messaging.IMessage> PublishMessageFilter { get; set; }
 		public Action<string, ServiceStack.Messaging.IMessage> GetMessageFilter { get; set; }
 
-		internal Producer()
+		internal Producer(MessageFactory factory)
 		{
 			semaphoreProducer = new System.Threading.SemaphoreSlim(1);
-			//this.MessageHandler = handlerFactory.CreateMessageHandler();
-			//this.MessageFactory = factory;
+
+			this.MessageFactory = factory;
 			this.ConnectionName = "Not connected";
 		}
 
@@ -96,7 +96,7 @@ namespace ServiceStack.ActiveMq
 		{
 			await Task.Factory.StartNew(() =>
 			{
-				
+				bool failed = true;
 				using (Apache.NMS.IMessageProducer producer = this.GetProducer(queueName).Result)
 				{
 					
@@ -108,8 +108,10 @@ namespace ServiceStack.ActiveMq
 					apacheMessage.Body = message.Body;
 					try
 					{
+
 						producer.Send(apacheMessage);
 						OnPublishedCallback?.Invoke();
+						failed = false;
 					}
 					catch (Apache.NMS.NMSException ex)
 					{
@@ -123,9 +125,15 @@ namespace ServiceStack.ActiveMq
 						this.OnMessagingError(ex);
 						throw ex;
 					}
-
+					finally
+					{
+						this.LastMessageProcessed = DateTime.Now;
+						if (failed) this.TotalMessagesFailed++;
+					}
 					this.State = System.Data.ConnectionState.Fetching;
 				}
+				
+				this.TotalMessagesProcessed++;
 			});
 		}
 
@@ -148,5 +156,25 @@ namespace ServiceStack.ActiveMq
 			}
 		}
 
+		public void Add(IMessageHandlerStats stats)
+		{
+			stats.Add(this);
+		}
+
+		public string Name => this.ConnectionName;
+
+		public int UnConsumedMessageCount { get; private set; }
+
+		public int TotalMessagesFailed { get; private set; }
+
+		public int TotalRetries { get; private set; }
+
+		public int TotalNormalMessagesReceived { get; private set; }
+
+		public int TotalPriorityMessagesReceived { get; private set; }
+
+		public DateTime? LastMessageProcessed { get; protected set; }
+
+		public int TotalMessagesProcessed { get; protected set; }
 	}
 }

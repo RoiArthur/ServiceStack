@@ -1,4 +1,5 @@
 ﻿using ServiceStack.Logging;
+using ServiceStack.Messaging;
 using System;
 using System.Threading.Tasks;
 
@@ -44,6 +45,7 @@ namespace ServiceStack.ActiveMq
 					client = this.messageFactory.CreateMessageQueueClient();
 					((QueueClient)client).MessageFactory = messageFactory;
 					((QueueClient)client).MessageHandler = messageHandlerFactory.CreateMessageHandler();
+
 				}
 				return client;
 			}
@@ -94,7 +96,22 @@ namespace ServiceStack.ActiveMq
 			}
 		}
 
+		public void Add(IMessageHandlerStats stats)
+		{
+			throw new NotImplementedException();
+		}
+
 		#endregion
+
+		public virtual IMessageHandlerStats GetStats()
+		{
+			return ((Producer)this.MQClient).MessageHandler.GetStats();
+		}
+
+		public virtual string GetStatus()
+		{
+			return $"[Worker: {((Producer)this.MQClient).QueueName}, LastMsgAt: {((Producer)this.MQClient).LastMessageProcessed}]";
+		}
 
 	}
 }
