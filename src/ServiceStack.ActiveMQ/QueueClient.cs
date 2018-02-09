@@ -73,7 +73,7 @@ namespace ServiceStack.ActiveMq
 		public ServiceStack.Messaging.IMessage<T> Get<T>(string queueName, Func<Apache.NMS.IMessage> receiver)
 		{
 			ServiceStack.Messaging.IMessage<T> response = null;
-			Log.Debug($"Message of type [{typeof(T)}] (InQ) are retrieved from queue: [{queueName}]");
+			this.Logger().Debug($"Message of type [{typeof(T)}] (InQ) are retrieved from queue: [{queueName}]");
 
 			
 			var msg = receiver() as Apache.NMS.IObjectMessage;

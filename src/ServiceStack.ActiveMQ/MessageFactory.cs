@@ -9,7 +9,6 @@ namespace ServiceStack.ActiveMq
 {
 	public class MessageFactory : ServiceStack.Messaging.IMessageFactory
 	{
-		private static readonly ILog Log = LogManager.GetLogger(typeof(MessageFactory));
 
 		internal Apache.NMS.IConnectionFactory ConnectionFactory = null;
 
@@ -94,7 +93,7 @@ namespace ServiceStack.ActiveMq
 			bool retry = false;
 			try
 			{
-				Log.Info($"Etablish connection to ActiveMQBroker {this.ConnectionFactory.BrokerUri}");
+				this.Logger().Info($"Etablish connection to ActiveMQBroker {this.ConnectionFactory.BrokerUri}");
 				connection = this.ConnectionFactory.CreateConnection(this.UserName, this.Password);
 				connection.ClientId = this.GenerateConnectionId();
 				return connection;
@@ -117,19 +116,19 @@ namespace ServiceStack.ActiveMq
 				}
 				else
 				{
-					Log.Warn(exc.Message);
+					this.Logger().Warn(exc.Message);
 				}
 			}
 
 			if (retry)
 			{
-				Log.Warn($"[Worker {connection.ClientId}] > {ex.Message} - Retry in 5 seconds");
+				this.Logger().Warn($"[Worker {connection.ClientId}] > {ex.Message} - Retry in 5 seconds");
 				new System.Threading.AutoResetEvent(false).WaitOne(NMSConstants.defaultRequestTimeout);
 				return await GetConnectionAsync();            // Retry
 			}
 			else
 			{
-				Log.Error($"Could not connect to ActiveMQ [{this.ConnectionFactory.BrokerUri}]", ex.GetBaseException());
+				this.Logger().Error($"Could not connect to ActiveMQ [{this.ConnectionFactory.BrokerUri}]", ex.GetBaseException());
 			}
 			return null;
 		}

@@ -9,7 +9,6 @@ namespace ServiceStack.ActiveMq
 {
 	internal partial class Producer : ServiceStack.Messaging.IMessageProducer, IOneWayClient, Messaging.IMessageHandlerStats
 	{
-		public static ILog Log = LogManager.GetLogger(typeof(Producer));
 
 		internal Messaging.IMessageFactory MessageFactory { get; set; }
 
@@ -48,12 +47,12 @@ namespace ServiceStack.ActiveMq
 
 		internal void OnMessagingError(Exception ex)
 		{
-			Log.Error(ex);
+			this.Logger().Error(ex);
 		}
 
 		internal void OnTransportError(Exception ex)
 		{
-			Log.Error(ex);
+			this.Logger().Error(ex);
 		}
 
 		public virtual string GetTempQueueName()

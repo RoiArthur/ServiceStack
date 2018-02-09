@@ -68,7 +68,7 @@ namespace ServiceStack.ActiveMq
 						}
 						catch (Exception ex)
 						{
-							throw;
+							throw ex;
 						}
 						
 					}

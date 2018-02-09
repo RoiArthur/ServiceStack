@@ -29,7 +29,7 @@ namespace ServiceStack.ActiveMq
 				_state = value;
 				if (raise)
 				{
-					Log.Debug($"Active MQ Connector [{this.ConnectionName}] has changed from [{oldstate.ToString()}] to [{_state.ToString()}]");
+					this.Logger().Debug($"Active MQ Connector [{this.ConnectionName}] has changed from [{oldstate.ToString()}] to [{_state.ToString()}]");
 					ConnectionStateChanged?.Invoke(this, value);
 				}
 			}
@@ -66,7 +66,7 @@ namespace ServiceStack.ActiveMq
 			this.State = System.Data.ConnectionState.Connecting;
 			try
 			{
-				Log.Info($"Connecting ActiveMQ Broker... [{this.Connection.ClientId}]");
+				this.Logger().Info($"Connecting ActiveMQ Broker... [{this.Connection.ClientId}]");
 
 				this.Connection.Start();
 				this.ConnectionName = this.Connection.ClientId;
@@ -81,17 +81,17 @@ namespace ServiceStack.ActiveMq
 			}
 			catch (TaskCanceledException)
 			{
-				Log.Info($"Safe connection close for {this.Connection.ClientId} while {stage});");
+				this.Logger().Info($"Safe connection close for {this.Connection.ClientId} while {stage});");
 			}
 			catch (Exception ex)
 			{
-				Log.Error($"An exception has occured while {stage} for {this.Connection.Dump()} : {ex.Dump()});");
+				this.Logger().Error($"An exception has occured while {stage} for {this.Connection.Dump()} : {ex.Dump()});");
 			}
 		}
 
 		internal void CloseConnection()
 		{
-			Log.Warn($"Connection to ActiveMQ (Queue : {this.ConnectionName} is shutting down");
+			this.Logger().Warn($"Connection to ActiveMQ (Queue : {this.ConnectionName} is shutting down");
 
 			if(connection!=null)
 			{
@@ -101,12 +101,7 @@ namespace ServiceStack.ActiveMq
 				connection.ConnectionResumedListener -= Connection_ConnectionResumedListener;
 				connection.ExceptionListener -= Connection_ExceptionListener;
 				//Close all MQClient queues !!!! Not implemented
-
-
 				connection.Close();
-
-				connection.Dispose();
-				connection = null;
 			}
 			
 
@@ -203,11 +198,11 @@ namespace ServiceStack.ActiveMq
 						_consumer = this.Session.CreateConsumer(destination);
 						_consumer.ConsumerTransformer = CreateConsumerTransformer();
 
-						Log.Debug($"A Consumer {_consumer.Dump()} has been created to listen on queue [{queuename}].");
+						this.Logger().Debug($"A Consumer {_consumer.Dump()} has been created to listen on queue [{queuename}].");
 					}
 					catch (Exception ex)
 					{
-						Log.Warn($"A problem occured while creating a Consumer on queue [{queuename}]: {ex.GetBaseException().Message}");
+						this.Logger().Warn($"A problem occured while creating a Consumer on queue [{queuename}]: {ex.GetBaseException().Message}");
 						return _consumer;
 					}
 					finally
@@ -264,7 +259,7 @@ namespace ServiceStack.ActiveMq
 			catch (Exception ex)
 			{
 				System.Diagnostics.Debugger.Break();
-				Log.Warn($"A problem occured while creating a Producer on queue {queuename}: {ex.GetBaseException().Message}");
+				this.Logger().Warn($"A problem occured while creating a Producer on queue {queuename}: {ex.GetBaseException().Message}");
 				return null;
 			}
 			finally
@@ -283,13 +278,15 @@ namespace ServiceStack.ActiveMq
 			{
 				if (disposing)
 				{
-					Log.Info($"Close connection : [{this.ConnectionName}]");
+					this.Logger().Info($"Close connection : [{this.ConnectionName}]");
 					// Close Listening Thread
 					cancellationTokenSource.Cancel();
 					//Wait until Cancellation has been achieved
 					Task.Delay(500);
 
 					this.CloseConnection();
+					connection.Dispose();
+					connection = null;
 				}
 				// TODO: free unmanaged resources (unmanaged objects) and override a finalizer below.
 				// TODO: set large fields to null.
