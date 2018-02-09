@@ -32,7 +32,10 @@ namespace ServiceStack.ActiveMq
 
 		public virtual void Nak(Messaging.IMessage message, bool requeue, Exception exception = null)
 		{
-			
+			if (this.Session.AcknowledgementMode == Apache.NMS.AcknowledgementMode.ClientAcknowledge)
+			{
+				//if(exception!=null)
+			}
 		}
 
 		public ServiceStack.Messaging.IMessage<T> CreateMessage<T>(object mqResponse)

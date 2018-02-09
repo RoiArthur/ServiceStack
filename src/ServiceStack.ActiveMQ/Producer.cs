@@ -117,13 +117,11 @@ namespace ServiceStack.ActiveMq
 					{
 						ex = new Apache.NMS.NMSException($"Unable to send message of type {message.Body.GetType().Name}", ex);
 						this.OnTransportError(ex);
-						throw ex;
 					}
 					catch (Exception ex)
 					{
 						ex = new Apache.NMS.MessageFormatException($"Unable to send message of type {message.Body.GetType().Name}", ex.GetBaseException());
 						this.OnMessagingError(ex);
-						throw ex;
 					}
 					finally
 					{

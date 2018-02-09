@@ -62,7 +62,15 @@ namespace ServiceStack.ActiveMq
 					string queueName = queue.ResolveQueueNameFn(queue.MessageHandler.MessageType.Name, ".inq");
 					if (DoNext())
 					{
-						queue.MessageHandler.ProcessQueue(queue, queueName, DoNext);
+						try
+						{
+							queue.MessageHandler.ProcessQueue(queue, queueName, DoNext);
+						}
+						catch (Exception ex)
+						{
+							throw;
+						}
+						
 					}
 					else
 					{

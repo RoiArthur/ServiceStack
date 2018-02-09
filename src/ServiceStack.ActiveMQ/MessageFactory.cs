@@ -47,6 +47,8 @@ namespace ServiceStack.ActiveMq
 
 			try
 			{
+				this.Logger().Debug($"Creates connection [{this.TransportType}] from Activeq broker [{this.BrokerUri}]");
+
 				this.ConnectionFactory = connectionFactory;
 				string prefix = $"{System.Diagnostics.Process.GetCurrentProcess().ProcessName}-{Environment.MachineName}";
 				this.BrokerUri = connectionFactory.BrokerUri;
@@ -72,7 +74,8 @@ namespace ServiceStack.ActiveMq
 				this.isFaultTolerant = new Func<bool>(() => transport.IsFaultTolerant);
 				this.isStarted = new Func<bool>(() => transport.IsStarted);
 
-				
+				string state = transport.IsConnected ? "Connected" : "NotConnected";
+				this.Logger().Info($"Connection state [{state}]");
 			}
 			catch (Exception ex)
 			{
@@ -165,6 +168,7 @@ namespace ServiceStack.ActiveMq
 
 		public virtual Messaging.IMessageQueueClient CreateMessageQueueClient()
 		{
+			this.Logger().Debug($"Creates Queue Consumer");
 			return new QueueClient(this)
 			{
 				PublishMessageFilter = PublishMessageFilter,
@@ -175,6 +179,7 @@ namespace ServiceStack.ActiveMq
 
 		public virtual Messaging.IMessageProducer CreateMessageProducer()
 		{
+			this.Logger().Debug($"Creates Queue Publisher");
 			return new Producer(this)
 			{
 				PublishMessageFilter = PublishMessageFilter,
@@ -190,6 +195,7 @@ namespace ServiceStack.ActiveMq
 		{
 			if (!disposedValue)
 			{
+				this.Logger().Debug($"Dispose Message Factory");
 				if (disposing)
 				{
 					// Close Listening Thread

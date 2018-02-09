@@ -11,8 +11,6 @@ namespace ServiceStack.ActiveMq
 	public partial class Server : IMessageService, IDisposable
 	{
 
-		public static readonly ILog Log = LogManager.GetLogger(typeof(Server));
-
 		public int DefaultRetryCount = (new Apache.NMS.Policies.RedeliveryPolicy()).MaximumRedeliveries; //Will be a total of 2 attempts
 
 		public Server(
@@ -26,9 +24,10 @@ namespace ServiceStack.ActiveMq
 
 		public Server(ActiveMq.MessageFactory messageFactory)
 		{
+			
 			this.messageFactory = messageFactory;
 			this.ResolveQueueNameFn = (type, suffix) => ServiceStack.Messaging.QueueNames.ResolveQueueNameFn(type as string, suffix);
-			this.ErrorHandler = (worker, ex) => Log.Error("Exception in Active MQ Plugin: ", ex);
+			this.ErrorHandler = (worker, ex) => this.Logger().Error("Exception in Active MQ Plugin: ", ex);
 
 		}
 
@@ -152,6 +151,8 @@ namespace ServiceStack.ActiveMq
 			if (noOfThreads <= 0) noOfThreads = 1; // 1 is Best performances as Apache.NMS manages threading
 			IMessageHandlerFactory handlerMessageFactory = CreateMessageHandlerFactory<T>(processMessageFn, processExceptionEx);
 			handlerMap[typeof(T)] = new Tuple<IMessageHandlerFactory, Worker[]>(handlerMessageFactory, new Worker[noOfThreads]);
+
+			this.Logger().Info($"Message of type [{typeof(T).Name}] has been registered to use with ActiveMq");
 		}
 
 		public void Start()
@@ -165,6 +166,7 @@ namespace ServiceStack.ActiveMq
 					//Log.Info(($"Start ActiveMq Messages handler for type {kv.}")
 					for (int i = 0; i < tuple.Item2.Length; i++)
 					{
+						this.Logger().Info($"Start worker [{i+1}] for type [{tuple.Item1}] ");
 						tuple.Item2[i] = await Worker.StartAsync(this, tuple.Item1);
 					}
 				});

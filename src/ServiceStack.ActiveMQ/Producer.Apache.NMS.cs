@@ -114,16 +114,20 @@ namespace ServiceStack.ActiveMq
 
 		private void Connection_ExceptionListener(Exception exception)
 		{
-			this.OnMessagingError(exception);
+			//this.OnMessagingError(exception);
 		}
 
 		private void Connection_ConnectionResumedListener()
 		{
+			///var consumer = this.Consumer; //Better to switch off listening and recreates when reconnect
+			this.Logger().Info($"Connection to [{this.ConnectionName}] has been restored ");
 			this.State = System.Data.ConnectionState.Open;
 		}
 
 		private void Connection_ConnectionInterruptedListener()
 		{
+			//_consumer.Dispose(); //Better to switch off listening and recreates when reconnect
+			//_consumer = null;
 			this.State = System.Data.ConnectionState.Broken;
 			this.OnTransportError(new Apache.NMS.NMSConnectionException($"Connection to broker has been interrupted"));
 		}

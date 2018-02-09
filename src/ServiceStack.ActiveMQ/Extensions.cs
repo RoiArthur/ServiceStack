@@ -9,7 +9,14 @@ namespace ServiceStack.ActiveMq
 {
 	public static class ActiveMqExtensions
     {
+		private static ILog commonlog = Logging.LogManager.LogFactory.GetLogger(typeof(ActiveMqExtensions).Namespace);
 
+		public static ILog Logger(this object instance)
+		{
+			return commonlog;
+		}
+
+		public static ILog Logger() => commonlog;
 
 		private static Server GetActiveMqServer()
 		{
