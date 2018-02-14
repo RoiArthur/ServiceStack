@@ -47,12 +47,12 @@ namespace ServiceStack.ActiveMq
 
 		internal void OnMessagingError(Exception ex)
 		{
-			this.Logger().Error(ex);
+			ActiveMqExtensions.Logger.Error(ex);
 		}
 
 		internal void OnTransportError(Exception ex)
 		{
-			this.Logger().Error(ex);
+			ActiveMqExtensions.Logger.Error(ex);
 		}
 
 		public virtual string GetTempQueueName()

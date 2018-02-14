@@ -29,7 +29,7 @@ namespace ServiceStack.ActiveMq
 				_state = value;
 				if (raise)
 				{
-					this.Logger().Debug($"Active MQ Connector [{this.ConnectionName}] has changed from [{oldstate.ToString()}] to [{_state.ToString()}]");
+					ActiveMqExtensions.Logger.Debug($"Active MQ Connector [{this.ConnectionName}] has changed from [{oldstate.ToString()}] to [{_state.ToString()}]");
 					ConnectionStateChanged?.Invoke(this, value);
 				}
 			}
@@ -66,7 +66,7 @@ namespace ServiceStack.ActiveMq
 			this.State = System.Data.ConnectionState.Connecting;
 			try
 			{
-				this.Logger().Info($"Connecting ActiveMQ Broker... [{this.Connection.ClientId}]");
+				ActiveMqExtensions.Logger.Info($"Connecting ActiveMQ Broker... [{this.Connection.ClientId}]");
 
 				this.Connection.Start();
 				this.ConnectionName = this.Connection.ClientId;
@@ -81,17 +81,17 @@ namespace ServiceStack.ActiveMq
 			}
 			catch (TaskCanceledException)
 			{
-				this.Logger().Info($"Safe connection close for {this.Connection.ClientId} while {stage});");
+				ActiveMqExtensions.Logger.Info($"Safe connection close for {this.Connection.ClientId} while {stage});");
 			}
 			catch (Exception ex)
 			{
-				this.Logger().Error($"An exception has occured while {stage} for {this.Connection.Dump()} : {ex.Dump()});");
+				ActiveMqExtensions.Logger.Error($"An exception has occured while {stage} for {this.Connection.Dump()} : {ex.Dump()});");
 			}
 		}
 
 		internal void CloseConnection()
 		{
-			this.Logger().Warn($"Connection to ActiveMQ (Queue : {this.ConnectionName} is shutting down");
+			ActiveMqExtensions.Logger.Warn($"Connection to ActiveMQ (Queue : {this.ConnectionName} is shutting down");
 
 			if(connection!=null)
 			{
@@ -115,7 +115,7 @@ namespace ServiceStack.ActiveMq
 		private void Connection_ConnectionResumedListener()
 		{
 			///var consumer = this.Consumer; //Better to switch off listening and recreates when reconnect
-			this.Logger().Info($"Connection to [{this.ConnectionName}] has been restored ");
+			ActiveMqExtensions.Logger.Info($"Connection to [{this.ConnectionName}] has been restored ");
 			this.State = System.Data.ConnectionState.Open;
 		}
 
@@ -198,11 +198,11 @@ namespace ServiceStack.ActiveMq
 						_consumer = this.Session.CreateConsumer(destination);
 						_consumer.ConsumerTransformer = CreateConsumerTransformer();
 
-						this.Logger().Debug($"A Consumer {_consumer.Dump()} has been created to listen on queue [{queuename}].");
+						ActiveMqExtensions.Logger.Debug($"A Consumer {_consumer.Dump()} has been created to listen on queue [{queuename}].");
 					}
 					catch (Exception ex)
 					{
-						this.Logger().Warn($"A problem occured while creating a Consumer on queue [{queuename}]: {ex.GetBaseException().Message}");
+						ActiveMqExtensions.Logger.Warn($"A problem occured while creating a Consumer on queue [{queuename}]: {ex.GetBaseException().Message}");
 						return _consumer;
 					}
 					finally
@@ -259,7 +259,7 @@ namespace ServiceStack.ActiveMq
 			catch (Exception ex)
 			{
 				System.Diagnostics.Debugger.Break();
-				this.Logger().Warn($"A problem occured while creating a Producer on queue {queuename}: {ex.GetBaseException().Message}");
+				ActiveMqExtensions.Logger.Warn($"A problem occured while creating a Producer on queue {queuename}: {ex.GetBaseException().Message}");
 				return null;
 			}
 			finally
@@ -278,15 +278,18 @@ namespace ServiceStack.ActiveMq
 			{
 				if (disposing)
 				{
-					this.Logger().Info($"Close connection : [{this.ConnectionName}]");
+					ActiveMqExtensions.Logger.Info($"Close connection : [{this.ConnectionName}]");
 					// Close Listening Thread
 					cancellationTokenSource.Cancel();
 					//Wait until Cancellation has been achieved
 					Task.Delay(500);
 
 					this.CloseConnection();
-					connection.Dispose();
-					connection = null;
+					if(connection!=default(IConnection))
+					{
+						connection.Dispose();
+						connection = null;
+					}
 				}
 				// TODO: free unmanaged resources (unmanaged objects) and override a finalizer below.
 				// TODO: set large fields to null.

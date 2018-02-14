@@ -27,8 +27,10 @@ namespace ServiceStack.ActiveMq
 			{
 				((Apache.NMS.IMessage)message.Body).Acknowledge();
 			}
-			//message.Acknowledge();
+			ActiveMqExtensions.Logger.Debug($"Message to [{message.Id}] has been acked");
 		}
+
+		
 
 		public virtual void Nak(Messaging.IMessage message, bool requeue, Exception exception = null)
 		{
@@ -36,6 +38,7 @@ namespace ServiceStack.ActiveMq
 			{
 				//if(exception!=null)
 			}
+			ActiveMqExtensions.Logger.Debug($"Message to [{message.Id}] has been Nacked");
 		}
 
 		public ServiceStack.Messaging.IMessage<T> CreateMessage<T>(object mqResponse)
@@ -73,7 +76,7 @@ namespace ServiceStack.ActiveMq
 		public ServiceStack.Messaging.IMessage<T> Get<T>(string queueName, Func<Apache.NMS.IMessage> receiver)
 		{
 			ServiceStack.Messaging.IMessage<T> response = null;
-			this.Logger().Debug($"Message of type [{typeof(T)}] (InQ) are retrieved from queue: [{queueName}]");
+			ActiveMqExtensions.Logger.Debug($"Message of type [{typeof(T)}] (InQ) are retrieved from queue: [{queueName}]");
 
 			
 			var msg = receiver() as Apache.NMS.IObjectMessage;

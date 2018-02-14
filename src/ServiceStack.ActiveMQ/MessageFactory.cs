@@ -46,7 +46,7 @@ namespace ServiceStack.ActiveMq
 
 			try
 			{
-				this.Logger().Debug($"Creates connection [{this.TransportType}] from Activeq broker [{this.BrokerUri}]");
+				ActiveMqExtensions.Logger.Debug($"Creates connection [{this.TransportType}] from Activeq broker [{this.BrokerUri}]");
 
 				this.ConnectionFactory = connectionFactory;
 				string prefix = $"{System.Diagnostics.Process.GetCurrentProcess().ProcessName}-{Environment.MachineName}";
@@ -74,7 +74,7 @@ namespace ServiceStack.ActiveMq
 				this.isStarted = new Func<bool>(() => transport.IsStarted);
 
 				string state = transport.IsConnected ? "Connected" : "NotConnected";
-				this.Logger().Info($"Connection state [{state}]");
+				ActiveMqExtensions.Logger.Info($"Connection state [{state}]");
 			}
 			catch (Exception ex)
 			{
@@ -93,7 +93,7 @@ namespace ServiceStack.ActiveMq
 			bool retry = false;
 			try
 			{
-				this.Logger().Info($"Etablish connection to ActiveMQBroker {this.ConnectionFactory.BrokerUri}");
+				ActiveMqExtensions.Logger.Info($"Etablish connection to ActiveMQBroker {this.ConnectionFactory.BrokerUri}");
 				connection = this.ConnectionFactory.CreateConnection(this.UserName, this.Password);
 				connection.ClientId = this.GenerateConnectionId();
 				return connection;
@@ -116,19 +116,19 @@ namespace ServiceStack.ActiveMq
 				}
 				else
 				{
-					this.Logger().Warn(exc.Message);
+					ActiveMqExtensions.Logger.Warn(exc.Message);
 				}
 			}
 
 			if (retry)
 			{
-				this.Logger().Warn($"[Worker {connection.ClientId}] > {ex.Message} - Retry in 5 seconds");
+				ActiveMqExtensions.Logger.Warn($"[Worker {connection.ClientId}] > {ex.Message} - Retry in 5 seconds");
 				new System.Threading.AutoResetEvent(false).WaitOne(NMSConstants.defaultRequestTimeout);
 				return await GetConnectionAsync();            // Retry
 			}
 			else
 			{
-				this.Logger().Error($"Could not connect to ActiveMQ [{this.ConnectionFactory.BrokerUri}]", ex.GetBaseException());
+				ActiveMqExtensions.Logger.Error($"Could not connect to ActiveMQ [{this.ConnectionFactory.BrokerUri}]", ex.GetBaseException());
 			}
 			return null;
 		}
@@ -167,7 +167,7 @@ namespace ServiceStack.ActiveMq
 
 		public virtual Messaging.IMessageQueueClient CreateMessageQueueClient()
 		{
-			this.Logger().Debug($"Creates Queue Consumer");
+			ActiveMqExtensions.Logger.Debug($"Creates Queue Consumer");
 			return new QueueClient(this)
 			{
 				PublishMessageFilter = PublishMessageFilter,
@@ -178,7 +178,7 @@ namespace ServiceStack.ActiveMq
 
 		public virtual Messaging.IMessageProducer CreateMessageProducer()
 		{
-			this.Logger().Debug($"Creates Queue Publisher");
+			ActiveMqExtensions.Logger.Debug($"Creates Queue Publisher");
 			return new Producer(this)
 			{
 				PublishMessageFilter = PublishMessageFilter,
@@ -194,7 +194,7 @@ namespace ServiceStack.ActiveMq
 		{
 			if (!disposedValue)
 			{
-				this.Logger().Debug($"Dispose Message Factory");
+				ActiveMqExtensions.Logger.Debug($"Dispose Message Factory");
 				if (disposing)
 				{
 					// Close Listening Thread
