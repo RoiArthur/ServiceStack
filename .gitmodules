@@ -1,0 +1,4 @@
+[submodule "src/ServiceStack.ActiveMq"]
+	path = src/ServiceStack.ActiveMq
+	url = git@srdspgit1.eu.lectra.com:Cuttingroom.Data/ServiceStack.ActiveMq.git
+	branch = master
